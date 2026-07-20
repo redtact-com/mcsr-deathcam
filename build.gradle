@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.gradleup.shadow' version '8.3.6'
+}
+
+group = 'com.redtact'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+compileJava {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+compileTestJava {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'io.obs-websocket.community:client:2.0.0'
+    implementation 'org.xerial:sqlite-jdbc:3.46.1.3'
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'com.formdev:flatlaf:3.5.4'
+    implementation 'org.slf4j:slf4j-api:2.0.13'
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.13'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'com.redtact.deathcam.Main'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+shadowJar {
+    archiveBaseName = 'mcsr-deathcam'
+    archiveClassifier = ''
+    mergeServiceFiles()
+}
+
+// application の dist 系タスクは配布に使わない (fat jar のみ配布)
+tasks.named('distZip') { enabled = false }
+tasks.named('distTar') { enabled = false }
+tasks.named('shadowDistZip') { enabled = false }
+tasks.named('shadowDistTar') { enabled = false }
+tasks.named('startScripts') { dependsOn 'shadowJar' }
+tasks.named('startShadowScripts') { dependsOn 'jar' }
