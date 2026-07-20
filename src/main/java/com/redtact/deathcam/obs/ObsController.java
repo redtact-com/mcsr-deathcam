@@ -1,0 +1,216 @@
+package com.redtact.deathcam.obs;
+
+import com.redtact.deathcam.config.AppConfig;
+import com.redtact.deathcam.core.ObsGateway;
+import io.obswebsocket.community.client.OBSRemoteController;
+import io.obswebsocket.community.client.message.event.outputs.ReplayBufferSavedEvent;
+import io.obswebsocket.community.client.message.event.outputs.ReplayBufferStateChangedEvent;
+
+import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
+/**
+ * obs-websocket v5 gateway. Reconnects on its own; a lost connection degrades to
+ * failed save futures instead of exceptions in the pipeline.
+ */
+public final class ObsController implements ObsGateway {
+
+    private static final long SAVE_TIMEOUT_SECONDS = 15;
+
+    private final AppConfig config;
+    private final ScheduledExecutorService scheduler =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "obs-controller");
+                t.setDaemon(true);
+                return t;
+            });
+    private final ConcurrentLinkedQueue<CompletableFuture<Path>> pendingSaves = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean connecting = new AtomicBoolean(false);
+
+    private volatile OBSRemoteController controller;
+    private volatile boolean connected;
+    private volatile boolean bufferActive;
+    private volatile Consumer<String> statusListener = s -> { };
+
+    public ObsController(AppConfig config) {
+        this.config = config;
+    }
+
+    public void setStatusListener(Consumer<String> listener) {
+        this.statusListener = listener;
+    }
+
+    @Override
+    public void start() {
+        scheduler.scheduleWithFixedDelay(this::connectIfNeeded, 0, 10, TimeUnit.SECONDS);
+    }
+
+    private void connectIfNeeded() {
+        if (connected || !connecting.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            OBSRemoteController old = controller;
+            if (old != null) {
+                try {
+                    old.stop();
+                } catch (Throwable ignored) {
+                }
+            }
+            status("接続中 " + config.obsHost + ":" + config.obsPort);
+            controller = OBSRemoteController.builder()
+                    .host(config.obsHost)
+                    .port(config.obsPort)
+                    .password(config.obsPassword)
+                    .autoConnect(false)
+                    .connectionTimeout(5)
+                    .lifecycle()
+                    .onReady(this::onReady)
+                    .onDisconnect(this::onDisconnect)
+                    .onControllerError(err -> status("エラー: " + err.getReason()))
+                    .and()
+                    .registerEventListener(ReplayBufferSavedEvent.class, this::onReplaySaved)
+                    .registerEventListener(ReplayBufferStateChangedEvent.class, ev -> {
+                        Boolean active = ev.getOutputActive();
+                        if (active != null) {
+                            bufferActive = active;
+                        }
+                    })
+                    .build();
+            controller.connect();
+        } catch (Throwable t) {
+            System.err.println("[obs] connect failed: " + t);
+            status("未接続 (再試行中)");
+        } finally {
+            connecting.set(false);
+        }
+    }
+
+    private void onReady() {
+        connected = true;
+        status("接続済み");
+        ensureReplayBufferStarted();
+    }
+
+    private void onDisconnect() {
+        connected = false;
+        bufferActive = false;
+        status("切断 (再接続待ち)");
+        failPending("OBS disconnected");
+    }
+
+    private void onReplaySaved(ReplayBufferSavedEvent ev) {
+        CompletableFuture<Path> f = pendingSaves.poll();
+        String path = ev.getSavedReplayPath();
+        if (f != null && path != null) {
+            f.complete(Path.of(path));
+        }
+    }
+
+    private void failPending(String reason) {
+        CompletableFuture<Path> f;
+        while ((f = pendingSaves.poll()) != null) {
+            f.completeExceptionally(new IllegalStateException(reason));
+        }
+    }
+
+    @Override
+    public void shutdown() {
+        scheduler.shutdownNow();
+        OBSRemoteController c = controller;
+        if (c != null) {
+            try {
+                c.stop();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    @Override
+    public boolean isConnected() {
+        return connected;
+    }
+
+    @Override
+    public boolean isReplayBufferActive() {
+        return bufferActive;
+    }
+
+    @Override
+    public void ensureReplayBufferStarted() {
+        OBSRemoteController c = controller;
+        if (c == null || !connected) {
+            return;
+        }
+        c.getReplayBufferStatus(resp -> {
+            if (resp != null && resp.isSuccessful() && Boolean.TRUE.equals(resp.getOutputActive())) {
+                bufferActive = true;
+                return;
+            }
+            c.startReplayBuffer(startResp -> {
+                if (startResp != null && startResp.isSuccessful()) {
+                    bufferActive = true;
+                    status("接続済み / リプレイバッファ開始");
+                } else {
+                    // 604 InvalidResourceState: replay buffer not enabled in OBS settings
+                    status("接続済み / リプレイバッファ未有効 (OBS設定で有効化が必要)");
+                }
+            });
+        });
+    }
+
+    @Override
+    public CompletableFuture<Path> saveReplayBuffer() {
+        OBSRemoteController c = controller;
+        CompletableFuture<Path> future = new CompletableFuture<>();
+        if (c == null || !connected) {
+            future.completeExceptionally(new IllegalStateException("OBS not connected"));
+            return future;
+        }
+        pendingSaves.add(future);
+        c.saveReplayBuffer(resp -> {
+            if (resp == null || !resp.isSuccessful()) {
+                if (pendingSaves.remove(future)) {
+                    future.completeExceptionally(new IllegalStateException("SaveReplayBuffer request failed"));
+                }
+            }
+        });
+        scheduler.schedule(() -> {
+            if (pendingSaves.remove(future)) {
+                future.completeExceptionally(new IllegalStateException("SaveReplayBuffer timeout"));
+            }
+        }, SAVE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        return future;
+    }
+
+    @Override
+    public void setBufferSeconds(int seconds) {
+        OBSRemoteController c = controller;
+        if (c == null || !connected) {
+            return;
+        }
+        String value = Integer.toString(seconds);
+        // Simple and Advanced output modes store the value under different categories.
+        c.setProfileParameter("SimpleOutput", "RecRBTime", value, resp -> { });
+        c.setProfileParameter("AdvOut", "RecRBTime", value, resp -> {
+            // OBS re-reads RecRBTime when the buffer starts, so restart to apply.
+            if (bufferActive) {
+                c.stopReplayBuffer(stopResp -> scheduler.schedule(
+                        this::ensureReplayBufferStarted, 2, TimeUnit.SECONDS));
+            }
+        });
+    }
+
+    private void status(String s) {
+        try {
+            statusListener.accept(s);
+        } catch (Throwable ignored) {
+        }
+    }
+}
