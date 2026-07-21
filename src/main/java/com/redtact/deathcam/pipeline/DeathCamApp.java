@@ -18,6 +18,7 @@ import com.redtact.deathcam.meta.RrfReader;
 import com.redtact.deathcam.obs.ObsController;
 import com.redtact.deathcam.store.SqliteDeathStore;
 import com.redtact.deathcam.ui.MainWindow;
+import com.redtact.deathcam.web.DashboardServer;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -84,9 +85,48 @@ public final class DeathCamApp {
         obs.setStatusListener(window::setObsStatus);
         obs.start();
         worldTracker.start();
+        startDashboard();
         window.setWorldStatus("ワールド待機中 (latest_world.json 監視)");
         window.refreshRecords();
         window.setVisible(true);
+    }
+
+    private void startDashboard() {
+        try {
+            DashboardServer server = new DashboardServer(store, config.webPort);
+            server.start();
+            String url = server.url();
+            window.setDashboardOpener(() -> browse(url));
+            System.out.println("[app] dashboard at " + url);
+            if (config.openBrowserOnStart) {
+                browse(url);
+            }
+        } catch (IOException e) {
+            // Port taken (another instance?) — retry on an ephemeral port before giving up.
+            try {
+                DashboardServer server = new DashboardServer(store, 0);
+                server.start();
+                String url = server.url();
+                window.setDashboardOpener(() -> browse(url));
+                System.err.println("[app] port " + config.webPort + " busy, dashboard at " + url);
+                if (config.openBrowserOnStart) {
+                    browse(url);
+                }
+            } catch (IOException e2) {
+                System.err.println("[app] dashboard failed to start: " + e2);
+            }
+        }
+    }
+
+    private static void browse(String url) {
+        try {
+            if (java.awt.Desktop.isDesktopSupported()
+                    && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+            }
+        } catch (Exception e) {
+            System.err.println("[app] cannot open browser: " + e);
+        }
     }
 
     private Path clipsDir() {

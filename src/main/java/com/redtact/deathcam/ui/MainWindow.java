@@ -33,6 +33,12 @@ public final class MainWindow extends JFrame {
     private final JLabel obsLabel = new JLabel("OBS: -");
     private final JLabel worldLabel = new JLabel("World: -");
     private final JLabel bufferLabel = new JLabel("Buffer: -");
+    private volatile Runnable dashboardOpener;
+
+    /** Called by the pipeline once the embedded web server is up. */
+    public void setDashboardOpener(Runnable opener) {
+        this.dashboardOpener = opener;
+    }
 
     public MainWindow(AppConfig config, DeathStore store) {
         super("mcsr-deathcam");
@@ -56,6 +62,13 @@ public final class MainWindow extends JFrame {
             }
         });
 
+        JButton dashboardButton = new JButton("ダッシュボードを開く");
+        dashboardButton.addActionListener(e -> {
+            Runnable r = dashboardOpener;
+            if (r != null) {
+                r.run();
+            }
+        });
         JButton settingsButton = new JButton("設定");
         settingsButton.addActionListener(e ->
                 new SettingsDialog(this, config, this::refreshRecords).setVisible(true));
@@ -64,6 +77,7 @@ public final class MainWindow extends JFrame {
         JButton refreshButton = new JButton("更新");
         refreshButton.addActionListener(e -> refreshRecords());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 5));
+        buttonPanel.add(dashboardButton);
         buttonPanel.add(settingsButton);
         buttonPanel.add(openFolderButton);
         buttonPanel.add(refreshButton);

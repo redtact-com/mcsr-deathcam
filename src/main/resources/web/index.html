@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEATHCAM — black box</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230e0e11'/><circle cx='8' cy='8' r='5' fill='%23e0584f'/></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="rec-dot" aria-hidden="true"></span>
+    <h1 class="wordmark">DEATHCAM</h1>
+    <svg class="ekg" viewBox="0 0 220 24" aria-hidden="true" preserveAspectRatio="none">
+      <path class="ekg-line" d="M0 12 H40 L48 12 54 3 60 21 66 12 H104 L112 12 118 5 124 19 130 12 H164 L170 12 174 8 178 12 H220"/>
+    </svg>
+  </div>
+  <div class="top-meta">
+    <span id="total-badge" class="badge-mono">0 DEATHS ON RECORD</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <a href="#library" id="tab-library" class="tab" role="tab">LIBRARY</a>
+  <a href="#stats" id="tab-stats" class="tab" role="tab">STATS</a>
+</nav>
+
+<section class="filterbar" aria-label="filters">
+  <div class="f-group" id="range-presets">
+    <button class="f-preset" data-range="7">7D</button>
+    <button class="f-preset" data-range="30">30D</button>
+    <button class="f-preset" data-range="90">90D</button>
+    <button class="f-preset is-on" data-range="all">ALL</button>
+  </div>
+  <div class="f-group" id="phase-chips" aria-label="phase filter"></div>
+  <div class="f-group">
+    <select id="cause-select" class="f-select" aria-label="cause filter"><option value="">ALL CAUSES</option></select>
+    <input id="opponent-input" class="f-input" type="search" placeholder="opponent…" aria-label="opponent filter">
+    <select id="sort-select" class="f-select" aria-label="sort">
+      <option value="new">NEWEST</option>
+      <option value="old">OLDEST</option>
+      <option value="igt">IGT ASC</option>
+    </select>
+    <button id="clear-filters" class="f-clear" title="clear filters">RESET</button>
+  </div>
+</section>
+
+<main id="view-library" class="view" hidden>
+  <div id="card-grid" class="card-grid"></div>
+  <div id="library-empty" class="empty" hidden>
+    <div class="empty-code">NO SIGNAL</div>
+    <p>No deaths on record for these filters.<br>Loosen the filters — or go take some damage.</p>
+  </div>
+</main>
+
+<main id="view-stats" class="view" hidden>
+  <div class="tile-row" id="tile-row"></div>
+
+  <div class="stat-controls">
+    <label>TREND <select id="trend-gran" class="f-select"><option value="day">DAY</option><option value="week">WEEK</option></select></label>
+    <label>IGT BIN <select id="igt-bin" class="f-select"><option value="60">60 s</option><option value="30">30 s</option><option value="120">120 s</option></select></label>
+    <label>CAUSES <select id="cause-topn" class="f-select"><option value="6">TOP 6</option><option value="10">TOP 10</option><option value="0">ALL</option></select></label>
+    <label>PHASE VIEW <select id="phase-style" class="f-select"><option value="bar">BAR</option><option value="donut">DONUT</option></select></label>
+    <label>MAP <select id="map-dim" class="f-select"><option value="nether">NETHER</option><option value="surface">SURFACE</option><option value="end">END</option></select></label>
+    <button id="table-toggle" class="f-clear" aria-pressed="false">TABLE VIEW</button>
+  </div>
+
+  <div id="chart-grid" class="chart-grid">
+    <figure class="panel"><figcaption>DEATHS BY PHASE</figcaption><div class="plot"><canvas id="c-phase"></canvas></div></figure>
+    <figure class="panel"><figcaption>DEATH CAUSES</figcaption><div class="plot"><canvas id="c-cause"></canvas></div></figure>
+    <figure class="panel wide"><figcaption>DEATHS OVER TIME</figcaption><div class="plot"><canvas id="c-trend"></canvas></div></figure>
+    <figure class="panel"><figcaption>IGT AT DEATH <span class="cap-note">stacked by phase</span></figcaption><div class="plot"><canvas id="c-igt"></canvas></div></figure>
+    <figure class="panel"><figcaption>DEATH MAP <span class="cap-note" id="map-note">nether · x/z</span></figcaption><div class="plot"><canvas id="c-map"></canvas></div></figure>
+  </div>
+  <div id="phase-legend" class="phase-legend" aria-hidden="false"></div>
+
+  <div id="stats-table-wrap" class="table-wrap" hidden>
+    <table id="stats-table">
+      <thead><tr><th>DATE</th><th>PHASE</th><th>CAUSE</th><th>KILLER</th><th>IGT</th><th>POS</th><th>OPPONENT</th><th>WORLD</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div id="stats-empty" class="empty" hidden>
+    <div class="empty-code">NO SIGNAL</div>
+    <p>Nothing to aggregate for these filters.</p>
+  </div>
+</main>
+
+<div id="player" class="player" hidden>
+  <div class="player-shell">
+    <div class="player-video">
+      <video id="video" controls preload="metadata"></video>
+      <div id="mkv-warning" class="mkv-warning" hidden>
+        ⚠ This clip is <b>.mkv</b> — some browsers can't play it. Set OBS → Settings → Output → Recording Format to <b>Fragmented MP4</b> for future clips.
+      </div>
+      <div class="transport">
+        <button data-seek="-5">−5s</button>
+        <button data-seek="-1">−1s</button>
+        <button data-frame="-1" title=", key">◂ frame</button>
+        <button data-frame="1" title=". key">frame ▸</button>
+        <button data-seek="1">+1s</button>
+        <button data-seek="5">+5s</button>
+        <select id="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
+        <span class="spacer"></span>
+        <button id="prev-death">▲ PREV</button>
+        <button id="next-death">▼ NEXT</button>
+      </div>
+    </div>
+    <aside class="telemetry">
+      <button id="player-close" class="player-close" aria-label="close">✕</button>
+      <div class="t-head">
+        <span id="t-phase" class="phase-chip">—</span>
+        <span id="t-date" class="t-date">—</span>
+      </div>
+      <div class="t-cause"><span id="t-cause">—</span><span id="t-killer" class="t-killer"></span></div>
+      <blockquote id="t-raw" class="t-raw">—</blockquote>
+      <dl class="t-grid">
+        <dt>IGT</dt><dd id="t-igt" class="mono amber">—</dd>
+        <dt>POS</dt><dd id="t-pos" class="mono">—</dd>
+        <dt>MATCH</dt><dd id="t-match" class="mono">—</dd>
+        <dt>VS</dt><dd id="t-vs">—</dd>
+        <dt>WORLD</dt><dd id="t-world" class="mono small">—</dd>
+        <dt>SEED OW</dt><dd class="mono small copyable" id="t-seed-ow">—</dd>
+        <dt>SEED NET</dt><dd class="mono small copyable" id="t-seed-net">—</dd>
+        <dt>SEED END</dt><dd class="mono small copyable" id="t-seed-end">—</dd>
+        <dt>REPLAY</dt><dd id="t-rrf" class="mono small">—</dd>
+      </dl>
+      <p class="t-hint">SPACE play · ←/→ 1s · SHIFT+←/→ 5s · , / . frame</p>
+    </aside>
+  </div>
+</div>
+
+<script src="/vendor/chart.umd.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -36,6 +36,12 @@ public class AppConfig {
     /** Override for the instance .minecraft dir; null = auto-detect from latest_world.json. */
     public String instanceDir = null;
 
+    /** Port for the embedded dashboard (localhost only). 0 = pick a free port each start. */
+    public int webPort = 8777;
+
+    /** Open the dashboard in the default browser on startup. */
+    public boolean openBrowserOnStart = true;
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static Path configDir() {
