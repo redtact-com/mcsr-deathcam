@@ -94,6 +94,11 @@ public final class DeathCamApp {
             System.err.println("[app] cannot create library dirs: " + e);
         }
         obs.setStatusListener(window::setObsStatus);
+        obs.setBufferSecondsListener(secs -> {
+            window.setObsBufferSeconds(secs);
+            warnIfBufferShort(secs);
+        });
+        window.setObsBufferSupplier(obs::obsBufferSeconds);
         obs.start();
         worldTracker.start();
         startDashboard();
@@ -179,8 +184,29 @@ public final class DeathCamApp {
             PlayerNameResolver.resolve(next.instanceDir()).ifPresent(n -> playerName = n);
         }
         retargetTailer(next);
-        obs.setBufferSeconds(config.preRollSeconds + config.postRollSeconds);
+        // Do not force OBS's RecRBTime — the user sizes their own buffer (larger than
+        // pre+post for timing headroom); we only read it and warn if it's too short.
         obs.ensureReplayBufferStarted();
+    }
+
+    /** Latency headroom recommended between the app window (pre+post) and OBS's buffer. */
+    private static final int BUFFER_MARGIN_SECONDS = 5;
+
+    /**
+     * The saved clip is always [saveTime - RecRBTime, saveTime]; detection+save latency shifts
+     * that window forward, so if OBS's buffer isn't comfortably longer than pre+post the lead-in
+     * gets clipped. Warn the user to enlarge the OBS buffer.
+     */
+    private void warnIfBufferShort(int obsBufferSeconds) {
+        if (obsBufferSeconds <= 0) {
+            return;
+        }
+        int windowSecs = config.preRollSeconds + config.postRollSeconds;
+        int recommended = windowSecs + BUFFER_MARGIN_SECONDS;
+        if (obsBufferSeconds < recommended) {
+            window.setBufferStatus("⚠ OBS バッファ " + obsBufferSeconds + "s < 設定 " + windowSecs
+                    + "s。頭欠けの恐れ: OBS を " + recommended + "s 以上に設定してください");
+        }
     }
 
     private void retargetTailer(WorldSession s) {

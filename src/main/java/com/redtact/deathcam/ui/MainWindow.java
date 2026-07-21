@@ -60,10 +60,22 @@ public final class MainWindow extends JFrame {
     private final JLabel footer = new JLabel(" ");
 
     private volatile Runnable dashboardOpener;
+    private volatile java.util.function.IntSupplier obsBufferSupplier = () -> -1;
 
     /** Called by the pipeline once the embedded web server is up. */
     public void setDashboardOpener(Runnable opener) {
         this.dashboardOpener = opener;
+    }
+
+    /** Live source of OBS's replay-buffer length (seconds), for the settings dialog. */
+    public void setObsBufferSupplier(java.util.function.IntSupplier supplier) {
+        this.obsBufferSupplier = supplier;
+    }
+
+    /** Show OBS's current replay-buffer length as a hint on the recording row. */
+    public void setObsBufferSeconds(int seconds) {
+        SwingUtilities.invokeLater(() -> recValue.setToolTipText(
+                seconds > 0 ? "OBS リプレイバッファ: " + seconds + "s" : null));
     }
 
     public MainWindow(AppConfig config, DeathStore store) {
@@ -149,7 +161,7 @@ public final class MainWindow extends JFrame {
 
         JButton settings = ghostButton("設定");
         settings.addActionListener(e ->
-                new SettingsDialog(this, config, this::refreshRecords).setVisible(true));
+                new SettingsDialog(this, config, this::refreshRecords, obsBufferSupplier).setVisible(true));
         JButton folder = ghostButton("フォルダ");
         folder.addActionListener(e -> openLibraryFolder());
         JButton refresh = ghostButton("更新");

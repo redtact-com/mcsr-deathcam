@@ -5,6 +5,7 @@ import com.redtact.deathcam.core.ObsGateway;
 import io.obswebsocket.community.client.OBSRemoteController;
 import io.obswebsocket.community.client.message.event.outputs.ReplayBufferSavedEvent;
 import io.obswebsocket.community.client.message.event.outputs.ReplayBufferStateChangedEvent;
+import io.obswebsocket.community.client.message.response.config.GetProfileParameterResponse;
 
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -14,6 +15,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 /**
  * obs-websocket v5 gateway. Reconnects on its own; a lost connection degrades to
@@ -36,7 +38,9 @@ public final class ObsController implements ObsGateway {
     private volatile OBSRemoteController controller;
     private volatile boolean connected;
     private volatile boolean bufferActive;
+    private volatile int bufferSeconds = -1;   // OBS RecRBTime; -1 = unknown
     private volatile Consumer<String> statusListener = s -> { };
+    private volatile IntConsumer bufferSecondsListener = s -> { };
 
     public ObsController(AppConfig config) {
         this.config = config;
@@ -46,9 +50,21 @@ public final class ObsController implements ObsGateway {
         this.statusListener = listener;
     }
 
+    /** Notified with OBS's replay-buffer length (seconds) whenever it is (re)read. */
+    public void setBufferSecondsListener(IntConsumer listener) {
+        this.bufferSecondsListener = listener;
+    }
+
+    /** Last-read OBS replay-buffer length in seconds, or -1 if unknown. */
+    public int obsBufferSeconds() {
+        return bufferSeconds;
+    }
+
     @Override
     public void start() {
         scheduler.scheduleWithFixedDelay(this::connectIfNeeded, 0, 10, TimeUnit.SECONDS);
+        // Re-read the buffer length periodically in case it's changed in OBS.
+        scheduler.scheduleWithFixedDelay(this::refreshBufferSeconds, 12, 30, TimeUnit.SECONDS);
     }
 
     private void connectIfNeeded() {
@@ -100,7 +116,45 @@ public final class ObsController implements ObsGateway {
     private void onReady() {
         connected = true;
         status("接続済み");
+        refreshBufferSeconds();
         ensureReplayBufferStarted();
+    }
+
+    /** Read OBS's active-mode RecRBTime and publish it to the listener. */
+    private void refreshBufferSeconds() {
+        OBSRemoteController c = controller;
+        if (c == null || !connected) {
+            return;
+        }
+        c.getProfileParameter("Output", "Mode", modeResp -> {
+            String mode = modeResp != null ? effectiveValue(modeResp) : null;
+            String category = "Advanced".equalsIgnoreCase(mode) ? "AdvOut" : "SimpleOutput";
+            c.getProfileParameter(category, "RecRBTime", rbResp -> {
+                if (rbResp == null) {
+                    return;
+                }
+                try {
+                    String v = effectiveValue(rbResp);
+                    if (v != null && !v.isBlank()) {
+                        int secs = Integer.parseInt(v.trim());
+                        if (secs != bufferSeconds) {
+                            bufferSeconds = secs;
+                            try {
+                                bufferSecondsListener.accept(secs);
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    }
+                } catch (NumberFormatException ignored) {
+                    // leave bufferSeconds as-is
+                }
+            });
+        });
+    }
+
+    private static String effectiveValue(GetProfileParameterResponse resp) {
+        String v = resp.getParameterValue();
+        return (v != null && !v.isEmpty()) ? v : resp.getDefaultParameterValue();
     }
 
     private void onDisconnect() {
@@ -156,6 +210,12 @@ public final class ObsController implements ObsGateway {
         c.getReplayBufferStatus(resp -> {
             if (resp != null && resp.isSuccessful() && Boolean.TRUE.equals(resp.getOutputActive())) {
                 bufferActive = true;
+                status("接続済み / リプレイバッファ稼働中");
+                return;
+            }
+            if (!config.autoStartReplayBuffer) {
+                // Leave it to the user; warn so a death isn't silently missed.
+                status("接続済み / リプレイバッファ停止中 (自動起動オフ)");
                 return;
             }
             c.startReplayBuffer(startResp -> {

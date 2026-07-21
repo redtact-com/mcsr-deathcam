@@ -27,14 +27,20 @@ import java.io.File;
 /** Modal dialog that edits an {@link AppConfig} in place and saves on OK. */
 public final class SettingsDialog extends JDialog {
 
+    /** Recommended latency headroom between pre+post and the OBS buffer (mirrors DeathCamApp). */
+    private static final int BUFFER_MARGIN_SECONDS = 5;
+
     private final AppConfig config;
     private final Runnable onSaved;
+    private final java.util.function.IntSupplier obsBufferSeconds;
 
     private final JTextField obsHostField;
     private final JSpinner obsPortSpinner;
     private final JPasswordField obsPasswordField;
     private final JSpinner preRollSpinner;
     private final JSpinner postRollSpinner;
+    private final JCheckBox autoStartBufferCheck;
+    private final JLabel bufferHintLabel = new JLabel(" ");
     private final JCheckBox skipHungerResetCheck;
     private final JCheckBox recordRankedCheck;
     private final JCheckBox recordPrivateCheck;
@@ -42,15 +48,24 @@ public final class SettingsDialog extends JDialog {
     private final JTextField libraryDirField;
 
     public SettingsDialog(Window owner, AppConfig config, Runnable onSaved) {
+        this(owner, config, onSaved, () -> -1);
+    }
+
+    public SettingsDialog(Window owner, AppConfig config, Runnable onSaved,
+                          java.util.function.IntSupplier obsBufferSeconds) {
         super(owner, "設定", ModalityType.APPLICATION_MODAL);
         this.config = config;
         this.onSaved = onSaved;
+        this.obsBufferSeconds = obsBufferSeconds;
 
         obsHostField = new JTextField(config.obsHost, 20);
         obsPortSpinner = new JSpinner(new SpinnerNumberModel(config.obsPort, 1, 65535, 1));
         obsPasswordField = new JPasswordField(config.obsPassword, 20);
         preRollSpinner = new JSpinner(new SpinnerNumberModel(config.preRollSeconds, 1, 3600, 1));
         postRollSpinner = new JSpinner(new SpinnerNumberModel(config.postRollSeconds, 0, 3600, 1));
+        autoStartBufferCheck = new JCheckBox("リプレイバッファを自動起動", config.autoStartReplayBuffer);
+        preRollSpinner.addChangeListener(e -> updateBufferHint());
+        postRollSpinner.addChangeListener(e -> updateBufferHint());
         skipHungerResetCheck = new JCheckBox("ハンガーリセット時はスキップ", config.skipHungerReset);
         recordRankedCheck = new JCheckBox("ランクマを記録 (type 2)", config.recordRanked);
         recordPrivateCheck = new JCheckBox("プライベートを記録 (type 3)", config.recordPrivate);
@@ -65,10 +80,13 @@ public final class SettingsDialog extends JDialog {
         addRow(form, row++, "OBS Password:", obsPasswordField);
         addRow(form, row++, "Pre-roll (s):", preRollSpinner);
         addRow(form, row++, "Post-roll (s):", postRollSpinner);
+        addRow(form, row++, "", autoStartBufferCheck);
+        addRow(form, row++, "", bufferHintLabel);
         addRow(form, row++, "", skipHungerResetCheck);
         addRow(form, row++, "録画対象:", recordRankedCheck);
         addRow(form, row++, "", recordPrivateCheck);
         addRow(form, row++, "", recordOtherCheck);
+        updateBufferHint();
 
         JPanel libraryPanel = new JPanel();
         libraryPanel.setLayout(new BoxLayout(libraryPanel, BoxLayout.X_AXIS));
@@ -109,6 +127,27 @@ public final class SettingsDialog extends JDialog {
         form.add(field, c);
     }
 
+    /** Live hint under the roll spinners: compares pre+post against OBS's buffer length. */
+    private void updateBufferHint() {
+        int pre = ((Number) preRollSpinner.getValue()).intValue();
+        int post = ((Number) postRollSpinner.getValue()).intValue();
+        int window = pre + post;
+        int obs = obsBufferSeconds.getAsInt();
+        int recommended = window + BUFFER_MARGIN_SECONDS;
+        if (obs <= 0) {
+            bufferHintLabel.setText("<html>撮影窓 " + window + "s。OBS のリプレイバッファは "
+                    + recommended + "s 以上を推奨</html>");
+            bufferHintLabel.setForeground(new java.awt.Color(0x8A8781));
+        } else if (obs < recommended) {
+            bufferHintLabel.setText("<html>⚠ OBS バッファ " + obs + "s。撮影窓 " + window
+                    + "s には余裕不足 — OBS を <b>" + recommended + "s 以上</b>に設定してください</html>");
+            bufferHintLabel.setForeground(new java.awt.Color(0xE5B64F));
+        } else {
+            bufferHintLabel.setText("OBS バッファ " + obs + "s / 撮影窓 " + window + "s ✓");
+            bufferHintLabel.setForeground(new java.awt.Color(0x5DA84E));
+        }
+    }
+
     private void browseLibraryDir() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -134,6 +173,7 @@ public final class SettingsDialog extends JDialog {
         config.obsPassword = new String(obsPasswordField.getPassword());
         config.preRollSeconds = ((Number) preRollSpinner.getValue()).intValue();
         config.postRollSeconds = ((Number) postRollSpinner.getValue()).intValue();
+        config.autoStartReplayBuffer = autoStartBufferCheck.isSelected();
         config.skipHungerReset = skipHungerResetCheck.isSelected();
         config.recordRanked = recordRankedCheck.isSelected();
         config.recordPrivate = recordPrivateCheck.isSelected();

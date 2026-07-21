@@ -24,6 +24,9 @@ public class AppConfig {
     /** Seconds to keep recording AFTER the death before saving the buffer. */
     public int postRollSeconds = 5;
 
+    /** Automatically start OBS's replay buffer when connected. Off = you start it in OBS. */
+    public boolean autoStartReplayBuffer = true;
+
     /** Skip recording when the respawn point is a bed/anchor (intentional hunger reset). */
     public boolean skipHungerReset = true;
 
