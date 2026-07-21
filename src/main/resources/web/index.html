@@ -89,51 +89,71 @@
 </main>
 
 <div id="player" class="player" hidden>
-  <div class="player-shell">
-    <div class="player-video">
-      <video id="video" controls preload="metadata"></video>
-      <div id="mkv-warning" class="mkv-warning" hidden>
-        ⚠ This clip is <b>.mkv</b> — some browsers can't play it. Set OBS → Settings → Output → Recording Format to <b>Fragmented MP4</b> for future clips.
+  <div class="watch-shell">
+    <div class="watch-main">
+      <div class="watch-video">
+        <video id="video" controls preload="metadata"></video>
+        <div id="mkv-warning" class="mkv-warning" hidden>
+          ⚠ This clip is <b>.mkv</b> — some browsers can't play it. Set OBS → Settings → Output → Recording Format to <b>Fragmented MP4</b> for future clips.
+        </div>
+        <div class="transport">
+          <button data-seek="-5">−5s</button>
+          <button data-seek="-1">−1s</button>
+          <button data-frame="-1" title=", key">◂ frame</button>
+          <button data-frame="1" title=". key">frame ▸</button>
+          <button data-seek="1">+1s</button>
+          <button data-seek="5">+5s</button>
+          <select id="speed" aria-label="playback speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
+          <span class="spacer"></span>
+          <button id="prev-death" title="↑">▲ PREV</button>
+          <button id="next-death" title="↓">▼ NEXT</button>
+        </div>
       </div>
-      <div class="transport">
-        <button data-seek="-5">−5s</button>
-        <button data-seek="-1">−1s</button>
-        <button data-frame="-1" title=", key">◂ frame</button>
-        <button data-frame="1" title=". key">frame ▸</button>
-        <button data-seek="1">+1s</button>
-        <button data-seek="5">+5s</button>
-        <select id="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
-        <span class="spacer"></span>
-        <button id="prev-death">▲ PREV</button>
-        <button id="next-death">▼ NEXT</button>
+
+      <div class="watch-info">
+        <div class="wi-head">
+          <span id="t-phase" class="phase-chip">—</span>
+          <h2 id="t-cause" class="wi-cause">—</h2>
+          <span id="t-killer" class="t-killer"></span>
+        </div>
+        <div class="wi-badges">
+          <span id="t-date" class="wi-badge">—</span>
+          <span id="t-result" class="wi-badge">—</span>
+          <span id="t-elo" class="wi-badge">—</span>
+          <span id="t-vs" class="wi-badge">—</span>
+        </div>
+        <blockquote id="t-raw" class="t-raw">—</blockquote>
+        <dl class="t-grid">
+          <dt>IGT</dt><dd id="t-igt" class="mono amber">—</dd>
+          <dt>POS</dt><dd id="t-pos" class="mono">—</dd>
+          <dt>MATCH</dt><dd id="t-match" class="mono">—</dd>
+          <dt>WORLD</dt><dd id="t-world" class="mono small">—</dd>
+          <dt title="Overworld structure type">SEED TYPE</dt><dd id="t-seedtype" class="mono small">—</dd>
+          <dt>BASTION</dt><dd id="t-bastion" class="mono small">—</dd>
+          <dt title="Obsidian tower heights">END TOWERS</dt><dd id="t-towers" class="mono small">—</dd>
+          <dt title="MCSR seed identifier — not the numeric Minecraft seed">SEED ID <span class="dt-note">(MCSR)</span></dt><dd class="mono small copyable" id="t-seedid">—</dd>
+          <dt title="Numeric Minecraft seed (real ranked / .rrf only)">SEED OW <span class="dt-note">(num)</span></dt><dd class="mono small copyable" id="t-seed-ow">—</dd>
+          <dt>SEED NET</dt><dd class="mono small copyable" id="t-seed-net">—</dd>
+          <dt>SEED END</dt><dd class="mono small copyable" id="t-seed-end">—</dd>
+          <dt>REPLAY</dt><dd id="t-rrf" class="mono small">—</dd>
+        </dl>
+        <p class="t-hint">SPACE play · ←/→ 1s · SHIFT+←/→ 5s · , / . frame · ↑/↓ prev/next</p>
       </div>
     </div>
-    <aside class="telemetry">
-      <button id="player-close" class="player-close" aria-label="close">✕</button>
-      <div class="t-head">
-        <span id="t-phase" class="phase-chip">—</span>
-        <span id="t-date" class="t-date">—</span>
+
+    <aside class="watch-side">
+      <div class="side-head">
+        <span class="side-title">CLIPS <span id="side-count" class="side-count"></span></span>
+        <select id="side-sort" class="f-select" aria-label="clip order">
+          <option value="new">NEWEST</option>
+          <option value="old">OLDEST</option>
+          <option value="phase">SAME PHASE</option>
+          <option value="cause">SAME CAUSE</option>
+          <option value="igt">IGT ASC</option>
+        </select>
+        <button id="player-close" class="player-close" aria-label="close">✕</button>
       </div>
-      <div class="t-cause"><span id="t-cause">—</span><span id="t-killer" class="t-killer"></span></div>
-      <blockquote id="t-raw" class="t-raw">—</blockquote>
-      <dl class="t-grid">
-        <dt>IGT</dt><dd id="t-igt" class="mono amber">—</dd>
-        <dt>POS</dt><dd id="t-pos" class="mono">—</dd>
-        <dt>RESULT</dt><dd id="t-result" class="mono">—</dd>
-        <dt>ELO</dt><dd id="t-elo" class="mono">—</dd>
-        <dt>MATCH</dt><dd id="t-match" class="mono">—</dd>
-        <dt>VS</dt><dd id="t-vs">—</dd>
-        <dt>WORLD</dt><dd id="t-world" class="mono small">—</dd>
-        <dt>SEED TYPE</dt><dd id="t-seedtype" class="mono small">—</dd>
-        <dt>BASTION</dt><dd id="t-bastion" class="mono small">—</dd>
-        <dt>END TOWERS</dt><dd id="t-towers" class="mono small">—</dd>
-        <dt>SEED ID</dt><dd class="mono small copyable" id="t-seedid">—</dd>
-        <dt>SEED OW</dt><dd class="mono small copyable" id="t-seed-ow">—</dd>
-        <dt>SEED NET</dt><dd class="mono small copyable" id="t-seed-net">—</dd>
-        <dt>SEED END</dt><dd class="mono small copyable" id="t-seed-end">—</dd>
-        <dt>REPLAY</dt><dd id="t-rrf" class="mono small">—</dd>
-      </dl>
-      <p class="t-hint">SPACE play · ←/→ 1s · SHIFT+←/→ 5s · , / . frame</p>
+      <div id="side-list" class="side-list"></div>
     </aside>
   </div>
 </div>

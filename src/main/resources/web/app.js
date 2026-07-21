@@ -27,6 +27,7 @@ const state = {
   opponent: '',
   sort: 'new',
   table: false,
+  sideSort: 'new',
 };
 const charts = {};       // canvasId -> Chart
 let playerList = [];     // records shown in player prev/next order
@@ -195,16 +196,19 @@ function renderLibrary() {
     if (r.rrfPath) foot.appendChild(el('span', 'dc-rrf', '.rrf ●'));
     card.appendChild(foot);
 
-    card.addEventListener('click', () => openPlayer(list, i));
+    card.addEventListener('click', () => openPlayer(r));
     grid.appendChild(card);
   });
 }
 
 /* ---------- player ---------- */
 
-function openPlayer(list, idx) {
-  playerList = list; playerIdx = idx;
-  const r = list[idx];
+let currentRecord = null;   // the record playing in the watch view
+
+/** Open the watch view on a record and (re)build the clip rail around it. */
+function openPlayer(record) {
+  currentRecord = record;
+  const r = record;
   const p = PHASE_BY_ID[r.phase] || PHASE_BY_ID.UNKNOWN;
   const video = $('#video');
 
@@ -222,28 +226,32 @@ function openPlayer(list, idx) {
   chip.textContent = p.label;
   chip.style.setProperty('--pc', p.color);
   chip.style.background = p.color;
-  $('#t-date').textContent = new Date(r.detectedAtMillis).toLocaleString();
   $('#t-cause').textContent = causeLabel(r.cause);
   $('#t-killer').textContent = r.killer ? '← ' + r.killer : '';
   $('#t-raw').textContent = r.rawMessage || '—';
+
+  // badges (empty string -> hidden via :empty)
+  $('#t-date').textContent = new Date(r.detectedAtMillis).toLocaleString();
+  const mt = r.matchType === 2 ? 'RANKED' : r.matchType === 3 ? 'PRIVATE' : '';
+  $('#t-result').textContent = r.resultKind ? r.resultKind + (mt ? ` · ${mt}` : '') : (mt || '');
+  const elo = $('#t-elo');
+  if (r.eloChange != null) {
+    const sign = r.eloChange > 0 ? '+' : '';
+    const after = r.eloBefore != null ? `${r.eloBefore} → ${r.eloBefore + r.eloChange} ` : '';
+    elo.innerHTML = `ELO ${after}(${sign}${r.eloChange})`;
+    elo.style.color = r.eloChange > 0 ? '#5da84e' : r.eloChange < 0 ? '#c23f37' : '';
+  } else {
+    elo.textContent = '';
+    elo.style.color = '';
+  }
+  $('#t-vs').textContent = r.opponentName
+    ? 'vs ' + r.opponentName + (r.opponentElo != null ? ` (${r.opponentElo})` : '') : '';
+
+  // detail grid
   $('#t-igt').textContent = fmtIgt(r.igtAtDeathMillis)
     + (r.finalRtaMillis ? `  (match ${fmtIgt(r.finalRtaMillis)})` : '');
   $('#t-pos').textContent = r.deathX != null ? `${r.deathX} / ${r.deathY} / ${r.deathZ}` : '—';
-  const mt = r.matchType === 2 ? 'RANKED' : r.matchType === 3 ? 'PRIVATE' : '';
-  $('#t-result').textContent = r.resultKind ? r.resultKind + (mt ? `  ·  ${mt}` : '') : '—';
-  if (r.eloChange != null) {
-    const sign = r.eloChange > 0 ? '+' : '';
-    const after = r.eloBefore != null ? r.eloBefore + r.eloChange : null;
-    const head = r.eloBefore != null ? `${r.eloBefore} → ${after} ` : '';
-    $('#t-elo').innerHTML = `${head}<b>(${sign}${r.eloChange})</b>`;
-    $('#t-elo').style.color = r.eloChange > 0 ? '#5da84e' : r.eloChange < 0 ? '#c23f37' : '';
-  } else {
-    $('#t-elo').textContent = '—';
-    $('#t-elo').style.color = '';
-  }
   $('#t-match').textContent = r.matchId ? '#' + r.matchId : '—';
-  $('#t-vs').textContent = r.opponentName
-    ? r.opponentName + (r.opponentElo != null ? ` (${r.opponentElo})` : '') : '—';
   $('#t-world').textContent = r.worldName || '—';
   $('#t-seedtype').textContent = r.seedType || '—';
   $('#t-bastion').textContent = r.bastionType || '—';
@@ -254,8 +262,63 @@ function openPlayer(list, idx) {
   setCopyable('#t-seed-end', r.seedEnd);
   $('#t-rrf').textContent = r.rrfPath || '—';
 
+  renderSidebar();
   $('#player').hidden = false;
+  $('.watch-main').scrollTop = 0;
   if (r.clipPath) video.play().catch(() => {});
+}
+
+/** Order the clip rail relative to the current record per the sort selector. */
+function sidebarOrder() {
+  const list = filtered().slice();
+  const cur = currentRecord;
+  switch (state.sideSort) {
+    case 'old': list.sort((a, b) => a.detectedAtMillis - b.detectedAtMillis); break;
+    case 'igt': list.sort((a, b) => (a.igtAtDeathMillis ?? 1e15) - (b.igtAtDeathMillis ?? 1e15)); break;
+    case 'phase':
+      list.sort((a, b) => sameFirst(a, b, r => r.phase === cur.phase)
+        || b.detectedAtMillis - a.detectedAtMillis);
+      break;
+    case 'cause':
+      list.sort((a, b) => sameFirst(a, b, r => r.cause === cur.cause)
+        || b.detectedAtMillis - a.detectedAtMillis);
+      break;
+    default: list.sort((a, b) => b.detectedAtMillis - a.detectedAtMillis);
+  }
+  return list;
+}
+const sameFirst = (a, b, pred) => (pred(b) ? 1 : 0) - (pred(a) ? 1 : 0);
+
+function renderSidebar() {
+  const list = sidebarOrder();
+  playerList = list;
+  playerIdx = list.findIndex(r => r.id === currentRecord.id);
+  $('#side-count').textContent = `(${list.length})`;
+  const box = $('#side-list');
+  box.replaceChildren();
+  for (const r of list) {
+    const p = PHASE_BY_ID[r.phase] || PHASE_BY_ID.UNKNOWN;
+    const item = el('div', 'side-item' + (r.id === currentRecord.id ? ' is-current' : ''));
+
+    const thumb = el('div', 'si-thumb');
+    thumb.style.setProperty('--pc', p.color);
+    thumb.appendChild(el('span', 'si-phase', p.label));
+    if (r.igtAtDeathMillis != null) thumb.appendChild(el('span', 'si-igt', fmtIgt(r.igtAtDeathMillis)));
+    if (!r.clipPath) thumb.appendChild(el('span', 'si-noclip', 'NO CLIP'));
+    item.appendChild(thumb);
+
+    const body = el('div', 'si-body');
+    body.appendChild(el('div', 'si-cause', causeLabel(r.cause) + (r.killer ? ' ← ' + r.killer : '')));
+    const bits = [fmtDate(r.detectedAtMillis)];
+    if (r.seedType) bits.push(r.seedType);
+    if (r.opponentName) bits.push('vs ' + r.opponentName);
+    if (r.eloChange != null) bits.push((r.eloChange > 0 ? '+' : '') + r.eloChange + ' elo');
+    body.appendChild(el('div', 'si-sub', bits.join(' · ')));
+    item.appendChild(body);
+
+    item.addEventListener('click', () => openPlayer(r));
+    box.appendChild(item);
+  }
 }
 
 function setCopyable(sel, value) {
@@ -286,8 +349,12 @@ function bindPlayer() {
     b.addEventListener('click', () => { video.pause(); video.currentTime += Number(b.dataset.frame) / 30; }));
   $('#prev-death').addEventListener('click', () => step(-1));
   $('#next-death').addEventListener('click', () => step(1));
+  $('#side-sort').addEventListener('change', e => {
+    state.sideSort = e.target.value;
+    if (currentRecord) renderSidebar();
+  });
   const step = d => {
-    if (playerIdx + d >= 0 && playerIdx + d < playerList.length) openPlayer(playerList, playerIdx + d);
+    if (playerIdx + d >= 0 && playerIdx + d < playerList.length) openPlayer(playerList[playerIdx + d]);
   };
   document.addEventListener('keydown', e => {
     if ($('#player').hidden) return;
