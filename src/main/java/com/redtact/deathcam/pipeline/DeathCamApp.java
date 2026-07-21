@@ -12,6 +12,7 @@ import com.redtact.deathcam.detect.PlayerNameResolver;
 import com.redtact.deathcam.detect.WorldTracker;
 import com.redtact.deathcam.meta.EventsLogParser;
 import com.redtact.deathcam.meta.HungerResetChecker;
+import com.redtact.deathcam.meta.RankedApiClient;
 import com.redtact.deathcam.meta.RecordJsonParser;
 import com.redtact.deathcam.meta.RrfArchiver;
 import com.redtact.deathcam.meta.RrfReader;
@@ -27,8 +28,10 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,11 +51,15 @@ public final class DeathCamApp {
     /** Tolerance when pairing our detected deaths with .rrf timeline deaths. */
     private static final long PAIR_TOLERANCE_MILLIS = 30_000;
 
+    /** Records older than this are no longer re-tried by the enrichment sweep. */
+    private static final long ENRICH_WINDOW_MILLIS = 3 * 60 * 60 * 1000L;
+
     private final AppConfig config;
     private final DeathStore store;
     private final ObsController obs;
     private final MainWindow window;
     private final WorldTracker worldTracker;
+    private final RankedApiClient api;
     private final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "deathcam-pipeline");
@@ -73,6 +80,10 @@ public final class DeathCamApp {
         this.obs = new ObsController(config);
         this.window = new MainWindow(config, store);
         this.worldTracker = new WorldTracker(WorldTracker.defaultLatestWorldJson(), this::onWorldChange);
+        this.api = config.enableRankedApi ? new RankedApiClient() : null;
+        if (config.playerName != null && !config.playerName.isBlank()) {
+            this.playerName = config.playerName;
+        }
     }
 
     public void start() {
@@ -86,6 +97,11 @@ public final class DeathCamApp {
         obs.start();
         worldTracker.start();
         startDashboard();
+        // Retry API enrichment for any recent records still missing match data
+        // (covers app restart, the last world of a session, and API indexing delay).
+        if (api != null) {
+            scheduler.scheduleWithFixedDelay(this::enrichPending, 25, 60, TimeUnit.SECONDS);
+        }
         window.setWorldStatus("ワールド待機中 (latest_world.json 監視)");
         window.refreshRecords();
         window.setVisible(true);
@@ -155,7 +171,9 @@ public final class DeathCamApp {
             return;
         }
 
-        PlayerNameResolver.resolve(next.instanceDir()).ifPresent(n -> playerName = n);
+        if (config.playerName == null || config.playerName.isBlank()) {
+            PlayerNameResolver.resolve(next.instanceDir()).ifPresent(n -> playerName = n);
+        }
         retargetTailer(next);
         obs.setBufferSeconds(config.preRollSeconds + config.postRollSeconds);
         obs.ensureReplayBufferStarted();
@@ -282,6 +300,14 @@ public final class DeathCamApp {
                     }
                 });
             }
+
+            // Ranked API: seed type / bastion / end towers / opponent / elo / result + death IGT.
+            enrichFromApi(records);
+
+            // Offline fallback: approximate the final death IGT from events.log (leave_world),
+            // for the case where neither .rrf nor the API produced a time.
+            fillIgtFromEventsLog(s, records);
+
             for (DeathRecord rec : records) {
                 store.update(rec);
             }
@@ -289,6 +315,178 @@ public final class DeathCamApp {
         } catch (Throwable t) {
             System.err.println("[app] finalize failed for " + s.worldName() + ": " + t);
         }
+    }
+
+    /**
+     * Enrich a group of same-match deaths from the Ranked API. Correlates the deaths to a match
+     * by wall-clock time window, then fills seed/opponent/elo/result and pairs the per-death IGT
+     * from the match timeline. No-op when the API is disabled, the player is unknown, or the match
+     * is not yet indexed (the periodic sweep retries later).
+     */
+    private void enrichFromApi(List<DeathRecord> records) {
+        if (api == null || records.isEmpty()) {
+            return;
+        }
+        String me = playerName;
+        if (me == null || me.isBlank()) {
+            return;
+        }
+        long probe = records.get(0).detectedAtMillis;
+        RankedApiClient.ApiMatch match = null;
+        for (RankedApiClient.ApiMatch m : api.recentMatches(me, 15)) {
+            if (m.containsWallClock(probe, PAIR_TOLERANCE_MILLIS)) {
+                match = m;
+                break;
+            }
+        }
+        if (match == null) {
+            return;
+        }
+        RankedApiClient.ApiMatch detail = api.matchDetail(match.id()).orElse(match);
+        String myUuid = detail.player(me).map(RankedApiClient.ApiPlayer::uuid).orElse(null);
+        for (DeathRecord rec : records) {
+            rec.matchId = detail.id();
+            rec.matchType = detail.type();
+            if (detail.resultTimeMs() != null) {
+                rec.finalRtaMillis = detail.resultTimeMs();
+            }
+            rec.seedType = detail.seedType();
+            rec.bastionType = detail.bastionType();
+            RankedApiClient.ApiSeed seed = detail.seed();
+            if (seed != null) {
+                rec.seedId = seed.id();
+                rec.endTowers = joinInts(seed.endTowers());
+                if (seed.variations() != null && !seed.variations().isEmpty()) {
+                    rec.seedVariations = String.join(",", seed.variations());
+                }
+            }
+            rec.resultKind = resultKind(detail, myUuid);
+            detail.opponent(me).ifPresent(op -> {
+                if (rec.opponentName == null) {
+                    rec.opponentName = op.nickname();
+                }
+                if (rec.opponentElo == null) {
+                    rec.opponentElo = op.eloRate();
+                }
+            });
+            if (myUuid != null) {
+                detail.changeForUuid(myUuid).ifPresent(ch -> {
+                    rec.eloChange = ch.change();
+                    if (ch.eloRate() != null) {
+                        rec.eloBefore = ch.eloRate() - ch.change();
+                    }
+                });
+            }
+        }
+        if (myUuid != null) {
+            pairApiDeaths(records, detail.deathsOf(myUuid), detail.startMillis());
+        }
+    }
+
+    /** Coarse offline IGT fallback: give the latest un-timed death the leave_world IGT. */
+    private void fillIgtFromEventsLog(WorldSession s, List<DeathRecord> records) {
+        EventsLogParser ev = EventsLogParser.parse(s.eventsLog());
+        Long igt = ev.leaveWorldIgt().or(ev::lastIgt).orElse(null);
+        if (igt == null) {
+            return;
+        }
+        DeathRecord latest = null;
+        for (DeathRecord rec : records) {
+            if (rec.igtAtDeathMillis == null
+                    && (latest == null || rec.detectedAtMillis > latest.detectedAtMillis)) {
+                latest = rec;
+            }
+        }
+        if (latest != null) {
+            latest.igtAtDeathMillis = igt;
+        }
+    }
+
+    /**
+     * Background sweep: re-try API enrichment for recent records that still lack match data.
+     * Groups by world (one world = one match) and enriches each group.
+     */
+    private void enrichPending() {
+        if (api == null) {
+            return;
+        }
+        try {
+            long cutoff = System.currentTimeMillis() - ENRICH_WINDOW_MILLIS;
+            Map<String, List<DeathRecord>> byWorld = new LinkedHashMap<>();
+            for (DeathRecord r : store.listRecent(100)) {
+                if (r.matchType != null || r.detectedAtMillis < cutoff || r.worldName == null) {
+                    continue;
+                }
+                byWorld.computeIfAbsent(r.worldName, k -> new ArrayList<>()).add(r);
+            }
+            boolean changed = false;
+            for (List<DeathRecord> group : byWorld.values()) {
+                enrichFromApi(group);
+                for (DeathRecord rec : group) {
+                    if (rec.matchType != null) {
+                        store.update(rec);
+                        changed = true;
+                    }
+                }
+            }
+            if (changed) {
+                window.refreshRecords();
+            }
+        } catch (Throwable t) {
+            System.err.println("[app] enrichPending failed: " + t);
+        }
+    }
+
+    /** Pair wall-clock deaths to the API match timeline (match-relative ms); IGT only. */
+    private void pairApiDeaths(List<DeathRecord> records,
+                               List<RankedApiClient.ApiTimeline> deaths, long startMillis) {
+        boolean[] used = new boolean[deaths.size()];
+        for (DeathRecord rec : records) {
+            long offset = rec.detectedAtMillis - startMillis;
+            int best = -1;
+            long bestDiff = PAIR_TOLERANCE_MILLIS;
+            for (int i = 0; i < deaths.size(); i++) {
+                if (used[i]) {
+                    continue;
+                }
+                long diff = Math.abs(deaths.get(i).time() - offset);
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    best = i;
+                }
+            }
+            if (best >= 0) {
+                used[best] = true;
+                if (rec.igtAtDeathMillis == null) {
+                    rec.igtAtDeathMillis = deaths.get(best).time();
+                }
+            }
+        }
+    }
+
+    private static String resultKind(RankedApiClient.ApiMatch m, String myUuid) {
+        String winner = m.resultUuid();
+        if (winner == null) {
+            return m.forfeited() ? "FORFEIT" : "DRAW";
+        }
+        if (myUuid != null && winner.equals(myUuid)) {
+            return "WIN";
+        }
+        return "LOSS";
+    }
+
+    private static String joinInts(int[] values) {
+        if (values == null || values.length == 0) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(values[i]);
+        }
+        return sb.toString();
     }
 
     /**

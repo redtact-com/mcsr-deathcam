@@ -42,6 +42,12 @@ public class AppConfig {
     /** Open the dashboard in the default browser on startup. */
     public boolean openBrowserOnStart = true;
 
+    /** Query api.mcsrranked.com after each match to enrich IGT/seed/opponent/result. */
+    public boolean enableRankedApi = true;
+
+    /** MCSR username for API lookups; null = auto-detect from the game logs. */
+    public String playerName = null;
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static Path configDir() {

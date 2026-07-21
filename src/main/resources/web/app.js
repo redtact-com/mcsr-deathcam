@@ -173,8 +173,9 @@ function renderLibrary() {
 
     const sub = el('div', 'dc-sub');
     sub.appendChild(el('span', null, fmtDate(r.detectedAtMillis)));
-    if (r.rankedTag) sub.appendChild(el('span', null, '#' + r.rankedTag));
+    if (r.seedType) sub.appendChild(el('span', null, r.seedType + (r.bastionType ? ' / ' + r.bastionType : '')));
     if (r.opponentName) sub.appendChild(el('span', null, 'vs ' + r.opponentName));
+    else if (r.rankedTag) sub.appendChild(el('span', null, '#' + r.rankedTag));
     if (r.deathX != null) sub.appendChild(el('span', null, `${r.deathX} ${r.deathY} ${r.deathZ}`));
     card.appendChild(sub);
 
@@ -182,6 +183,14 @@ function renderLibrary() {
     foot.appendChild(r.clipPath
       ? el('span', 'dc-watch', '▶ WATCH')
       : el('span', 'dc-noclip', 'NO CLIP'));
+    if (r.eloChange != null) {
+      const sign = r.eloChange > 0 ? '+' : '';
+      const e = el('span', 'dc-elo', `${sign}${r.eloChange} elo`);
+      e.style.color = r.eloChange > 0 ? 'var(--ph-overworld)' : r.eloChange < 0 ? 'var(--ph-nether)' : '';
+      foot.appendChild(e);
+    } else if (r.resultKind) {
+      foot.appendChild(el('span', null, r.resultKind.toLowerCase()));
+    }
     if (r.hungerReset) foot.appendChild(el('span', null, 'hunger-reset'));
     if (r.rrfPath) foot.appendChild(el('span', 'dc-rrf', '.rrf ●'));
     card.appendChild(foot);
@@ -218,12 +227,28 @@ function openPlayer(list, idx) {
   $('#t-killer').textContent = r.killer ? '← ' + r.killer : '';
   $('#t-raw').textContent = r.rawMessage || '—';
   $('#t-igt').textContent = fmtIgt(r.igtAtDeathMillis)
-    + (r.finalIgtMillis ? `  (final ${fmtIgt(r.finalIgtMillis)})` : '');
+    + (r.finalRtaMillis ? `  (match ${fmtIgt(r.finalRtaMillis)})` : '');
   $('#t-pos').textContent = r.deathX != null ? `${r.deathX} / ${r.deathY} / ${r.deathZ}` : '—';
+  const mt = r.matchType === 2 ? 'RANKED' : r.matchType === 3 ? 'PRIVATE' : '';
+  $('#t-result').textContent = r.resultKind ? r.resultKind + (mt ? `  ·  ${mt}` : '') : '—';
+  if (r.eloChange != null) {
+    const sign = r.eloChange > 0 ? '+' : '';
+    const after = r.eloBefore != null ? r.eloBefore + r.eloChange : null;
+    const head = r.eloBefore != null ? `${r.eloBefore} → ${after} ` : '';
+    $('#t-elo').innerHTML = `${head}<b>(${sign}${r.eloChange})</b>`;
+    $('#t-elo').style.color = r.eloChange > 0 ? '#5da84e' : r.eloChange < 0 ? '#c23f37' : '';
+  } else {
+    $('#t-elo').textContent = '—';
+    $('#t-elo').style.color = '';
+  }
   $('#t-match').textContent = r.matchId ? '#' + r.matchId : '—';
   $('#t-vs').textContent = r.opponentName
     ? r.opponentName + (r.opponentElo != null ? ` (${r.opponentElo})` : '') : '—';
   $('#t-world').textContent = r.worldName || '—';
+  $('#t-seedtype').textContent = r.seedType || '—';
+  $('#t-bastion').textContent = r.bastionType || '—';
+  $('#t-towers').textContent = r.endTowers || '—';
+  setCopyable('#t-seedid', r.seedId);
   setCopyable('#t-seed-ow', r.seedOverworld);
   setCopyable('#t-seed-net', r.seedNether);
   setCopyable('#t-seed-end', r.seedEnd);

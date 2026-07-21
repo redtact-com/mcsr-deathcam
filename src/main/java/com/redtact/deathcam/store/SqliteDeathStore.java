@@ -47,16 +47,40 @@ public final class SqliteDeathStore implements DeathStore {
               hunger_reset        INTEGER NOT NULL DEFAULT 0,
               clip_path           TEXT,
               rrf_path            TEXT,
-              notes               TEXT
+              notes               TEXT,
+              match_type          INTEGER NULL,
+              seed_id             TEXT,
+              seed_type           TEXT,
+              bastion_type        TEXT,
+              end_towers          TEXT,
+              seed_variations     TEXT,
+              result_kind         TEXT,
+              elo_before          INTEGER NULL,
+              elo_change          INTEGER NULL
             )""";
+
+    /** Columns added after 0.1.0; applied to pre-existing DBs via ALTER TABLE. */
+    private static final String[][] MIGRATIONS = {
+            {"match_type", "INTEGER"},
+            {"seed_id", "TEXT"},
+            {"seed_type", "TEXT"},
+            {"bastion_type", "TEXT"},
+            {"end_towers", "TEXT"},
+            {"seed_variations", "TEXT"},
+            {"result_kind", "TEXT"},
+            {"elo_before", "INTEGER"},
+            {"elo_change", "INTEGER"},
+    };
 
     private static final String INSERT_SQL = """
             INSERT INTO deaths (
               world_name, ranked_tag, match_id, detected_at_millis, cause, killer,
               raw_message, phase, igt_at_death_millis, final_igt_millis, final_rta_millis,
               seed_overworld, seed_nether, seed_end, death_x, death_y, death_z,
-              opponent_name, opponent_elo, hunger_reset, clip_path, rrf_path, notes
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""";
+              opponent_name, opponent_elo, hunger_reset, clip_path, rrf_path, notes,
+              match_type, seed_id, seed_type, bastion_type, end_towers, seed_variations,
+              result_kind, elo_before, elo_change
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""";
 
     private static final String UPDATE_SQL = """
             UPDATE deaths SET
@@ -66,14 +90,18 @@ public final class SqliteDeathStore implements DeathStore {
               seed_overworld = ?, seed_nether = ?, seed_end = ?,
               death_x = ?, death_y = ?, death_z = ?,
               opponent_name = ?, opponent_elo = ?, hunger_reset = ?,
-              clip_path = ?, rrf_path = ?, notes = ?
+              clip_path = ?, rrf_path = ?, notes = ?,
+              match_type = ?, seed_id = ?, seed_type = ?, bastion_type = ?, end_towers = ?,
+              seed_variations = ?, result_kind = ?, elo_before = ?, elo_change = ?
             WHERE id = ?""";
 
     private static final String SELECT_COLUMNS = """
             SELECT id, world_name, ranked_tag, match_id, detected_at_millis, cause, killer,
                    raw_message, phase, igt_at_death_millis, final_igt_millis, final_rta_millis,
                    seed_overworld, seed_nether, seed_end, death_x, death_y, death_z,
-                   opponent_name, opponent_elo, hunger_reset, clip_path, rrf_path, notes
+                   opponent_name, opponent_elo, hunger_reset, clip_path, rrf_path, notes,
+                   match_type, seed_id, seed_type, bastion_type, end_towers, seed_variations,
+                   result_kind, elo_before, elo_change
             FROM deaths """;
 
     private final Connection conn;
@@ -89,8 +117,27 @@ public final class SqliteDeathStore implements DeathStore {
                 st.execute("PRAGMA journal_mode=WAL");
                 st.execute(CREATE_TABLE);
             }
+            migrate();
         } catch (IOException | SQLException e) {
             throw new IllegalStateException("failed to open death store at " + dbFile, e);
+        }
+    }
+
+    /** Add any columns missing from a DB created by an older version. */
+    private void migrate() throws SQLException {
+        java.util.Set<String> existing = new java.util.HashSet<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(deaths)")) {
+            while (rs.next()) {
+                existing.add(rs.getString("name"));
+            }
+        }
+        for (String[] col : MIGRATIONS) {
+            if (!existing.contains(col[0])) {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("ALTER TABLE deaths ADD COLUMN " + col[0] + " " + col[1]);
+                }
+            }
         }
     }
 
@@ -178,6 +225,15 @@ public final class SqliteDeathStore implements DeathStore {
         ps.setString(i++, r.clipPath);
         ps.setString(i++, r.rrfPath);
         ps.setString(i++, r.notes);
+        setNullableInt(ps, i++, r.matchType);
+        ps.setString(i++, r.seedId);
+        ps.setString(i++, r.seedType);
+        ps.setString(i++, r.bastionType);
+        ps.setString(i++, r.endTowers);
+        ps.setString(i++, r.seedVariations);
+        ps.setString(i++, r.resultKind);
+        setNullableInt(ps, i++, r.eloBefore);
+        setNullableInt(ps, i++, r.eloChange);
         return i;
     }
 
@@ -233,6 +289,15 @@ public final class SqliteDeathStore implements DeathStore {
         r.clipPath = rs.getString("clip_path");
         r.rrfPath = rs.getString("rrf_path");
         r.notes = rs.getString("notes");
+        r.matchType = getNullableInt(rs, "match_type");
+        r.seedId = rs.getString("seed_id");
+        r.seedType = rs.getString("seed_type");
+        r.bastionType = rs.getString("bastion_type");
+        r.endTowers = rs.getString("end_towers");
+        r.seedVariations = rs.getString("seed_variations");
+        r.resultKind = rs.getString("result_kind");
+        r.eloBefore = getNullableInt(rs, "elo_before");
+        r.eloChange = getNullableInt(rs, "elo_change");
         return r;
     }
 

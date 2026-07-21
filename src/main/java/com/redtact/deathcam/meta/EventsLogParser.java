@@ -81,4 +81,23 @@ public final class EventsLogParser {
         }
         return Optional.ofNullable(last);
     }
+
+    /**
+     * IGT of {@code common.leave_world} — written when the player exits the world after a death.
+     * For a death-then-forfeit this closely approximates the IGT at the final death, so it serves
+     * as an offline fallback for the death IGT when the Ranked API and .rrf are unavailable.
+     */
+    public Optional<Long> leaveWorldIgt() {
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if ("common.leave_world".equals(events.get(i).id())) {
+                return Optional.of(events.get(i).igt());
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** IGT of the last recorded event, whatever it is (coarse offline death-IGT fallback). */
+    public Optional<Long> lastIgt() {
+        return events.isEmpty() ? Optional.empty() : Optional.of(events.get(events.size() - 1).igt());
+    }
 }

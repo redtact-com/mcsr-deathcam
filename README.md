@@ -20,10 +20,23 @@ Death dashcam for [MCSR Ranked](https://mcsrranked.com/) — automatically clips
 - Skips intentional hunger-reset deaths (respawn point is a bed/anchor) — configurable.
 - SQLite-backed library with a Swing UI.
 
+## Metadata sources
+
+Each death is enriched from whatever is available, in this order:
+
+- **latest.log** — cause, killer, phase, world (always, live).
+- **Ranked API** (`api.mcsrranked.com`, no auth) — after the match is indexed (~15 s), fills IGT at death, opponent + Elo, Elo change, result, and seed info: seed id, overworld/bastion type, obsidian tower heights, structure variations. Works for both ranked (type 2) and private/practice (type 3) matches.
+- **.rrf** (official ranked replay, real ranked only) — the plaintext numeric seeds and precise death coordinates; the file itself is archived so you can rewatch the match in-game.
+- **events.log** — an offline IGT fallback when the API is unreachable.
+
+Notes:
+- The numeric seed is only available for real recorded matches (from the `.rrf`); the ranked mod encrypts it in `level.dat` and this tool does not decrypt it. For practice worlds the API seed id + structure breakdown is provided instead.
+- Not every `mcsrranked #…` world becomes a recorded match — SeedQueue reset/practice worlds create local folders but no API match, so those deaths keep only the local fields.
+
 ## Requirements
 
 - Java 17+
-- OBS 28+ with the WebSocket server enabled (Tools → WebSocket Server Settings) and the **Replay Buffer enabled** (Settings → Output)
+- OBS 28+ with the WebSocket server enabled (Tools → WebSocket Server Settings) and the **Replay Buffer enabled** (Settings → Output). For in-browser playback set the recording format to **Fragmented MP4** (Settings → Output → Recording) — the dashboard warns on `.mkv` clips, which some browsers can't play.
 - MCSR Ranked 1.16.1 setup with SpeedrunIGT (the standard ranked install)
 
 ## Building
