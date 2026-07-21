@@ -71,9 +71,14 @@ public final class ObsController implements ObsGateway {
                     .autoConnect(false)
                     .connectionTimeout(5)
                     .lifecycle()
+                    // Suppress the library's own stack-trace logging; we surface a clean
+                    // status line instead (OBS being off simply means "not connected").
+                    .withControllerDefaultLogging(false)
+                    .withCommunicatorDefaultLogging(false)
                     .onReady(this::onReady)
                     .onDisconnect(this::onDisconnect)
-                    .onControllerError(err -> status("エラー: " + err.getReason()))
+                    .onControllerError(err -> status("未接続 (OBS 起動待ち)"))
+                    .onCommunicatorError(err -> status("未接続 (OBS 起動待ち)"))
                     .and()
                     .registerEventListener(ReplayBufferSavedEvent.class, this::onReplaySaved)
                     .registerEventListener(ReplayBufferStateChangedEvent.class, ev -> {
