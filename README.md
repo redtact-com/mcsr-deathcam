@@ -18,6 +18,7 @@ Death dashcam for [MCSR Ranked](https://mcsrranked.com/) — automatically clips
 - Metadata per death: cause + killer, run phase (overworld / nether / bastion / fortress / blind / stronghold / end), death coordinates, IGT at death, final IGT/RTA, all three seeds, opponent + Elo.
 - Archives the official ranked replay `.rrf` for each death match before the mod rotates it away, so you can rewatch the match in-game from any perspective later.
 - Skips intentional hunger-reset deaths (respawn point is a bed/anchor) — configurable.
+- Per-world-type recording toggles: ranked (type 2), private room (type 3), and other worlds (practice maps / singleplayer). Ranked and private are the same `mcsrranked #…` world and can only be told apart after the match, so a clip of a type you've turned off is recorded first and then deleted automatically once the API confirms its type.
 - SQLite-backed library with a Swing UI.
 
 ## Metadata sources

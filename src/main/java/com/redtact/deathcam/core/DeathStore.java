@@ -11,6 +11,9 @@ public interface DeathStore extends AutoCloseable {
     /** Update all nullable/late fields of an existing record by id. */
     void update(DeathRecord record);
 
+    /** Delete a record by id (used when a clip turns out to be an unrecorded world type). */
+    void delete(long id);
+
     /** Most recent records, newest first. */
     List<DeathRecord> listRecent(int limit);
 

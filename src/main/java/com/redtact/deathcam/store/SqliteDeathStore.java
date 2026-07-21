@@ -169,6 +169,16 @@ public final class SqliteDeathStore implements DeathStore {
     }
 
     @Override
+    public synchronized void delete(long id) {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM deaths WHERE id = ?")) {
+            ps.setLong(1, id);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("delete failed for id=" + id, e);
+        }
+    }
+
+    @Override
     public synchronized List<DeathRecord> listRecent(int limit) {
         String sql = SELECT_COLUMNS + " ORDER BY detected_at_millis DESC LIMIT ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {

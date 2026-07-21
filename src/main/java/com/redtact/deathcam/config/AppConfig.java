@@ -27,8 +27,14 @@ public class AppConfig {
     /** Skip recording when the respawn point is a bed/anchor (intentional hunger reset). */
     public boolean skipHungerReset = true;
 
-    /** Record only ranked worlds (mcsrranked #XXX). When false, any world is recorded. */
-    public boolean rankedOnly = true;
+    /**
+     * Which worlds to record. Ranked (type 2) and private (type 3) are both
+     * {@code mcsrranked #XXX} worlds and cannot be told apart until the match is
+     * queryable via the API, so a clip of a disabled type is deleted after the fact.
+     */
+    public boolean recordRanked = true;    // ranked queue matches (API type 2)
+    public boolean recordPrivate = true;   // private room matches (API type 3)
+    public boolean recordOther = false;    // non-mcsrranked worlds (practice maps, singleplayer)
 
     /** Override for the library root; null = {user.home}/mcsr-deathcam. */
     public String libraryDir = null;

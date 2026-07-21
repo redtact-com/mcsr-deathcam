@@ -216,4 +216,20 @@ class SqliteDeathStoreTest {
             assertEquals(1, store.listRecent(1).size());
         }
     }
+
+    @Test
+    void deleteRemovesOnlyTheTargetRow() {
+        Path db = tempDir.resolve("deaths.db");
+        try (SqliteDeathStore store = new SqliteDeathStore(db)) {
+            long a = store.insert(minimal("w1", 100L)).id;
+            long b = store.insert(minimal("w2", 200L)).id;
+            store.delete(a);
+            List<DeathRecord> rows = store.listRecent(10);
+            assertEquals(1, rows.size());
+            assertEquals(b, rows.get(0).id);
+            // deleting a non-existent id is a harmless no-op
+            store.delete(9999L);
+            assertEquals(1, store.listRecent(10).size());
+        }
+    }
 }

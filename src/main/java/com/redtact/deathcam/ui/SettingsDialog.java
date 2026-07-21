@@ -36,7 +36,9 @@ public final class SettingsDialog extends JDialog {
     private final JSpinner preRollSpinner;
     private final JSpinner postRollSpinner;
     private final JCheckBox skipHungerResetCheck;
-    private final JCheckBox rankedOnlyCheck;
+    private final JCheckBox recordRankedCheck;
+    private final JCheckBox recordPrivateCheck;
+    private final JCheckBox recordOtherCheck;
     private final JTextField libraryDirField;
 
     public SettingsDialog(Window owner, AppConfig config, Runnable onSaved) {
@@ -50,7 +52,9 @@ public final class SettingsDialog extends JDialog {
         preRollSpinner = new JSpinner(new SpinnerNumberModel(config.preRollSeconds, 1, 3600, 1));
         postRollSpinner = new JSpinner(new SpinnerNumberModel(config.postRollSeconds, 0, 3600, 1));
         skipHungerResetCheck = new JCheckBox("ハンガーリセット時はスキップ", config.skipHungerReset);
-        rankedOnlyCheck = new JCheckBox("Ranked ワールドのみ記録", config.rankedOnly);
+        recordRankedCheck = new JCheckBox("ランクマを記録 (type 2)", config.recordRanked);
+        recordPrivateCheck = new JCheckBox("プライベートを記録 (type 3)", config.recordPrivate);
+        recordOtherCheck = new JCheckBox("その他ワールドを記録 (練習/シングル)", config.recordOther);
         libraryDirField = new JTextField(config.libraryDir != null ? config.libraryDir : "", 20);
 
         JPanel form = new JPanel(new GridBagLayout());
@@ -62,7 +66,9 @@ public final class SettingsDialog extends JDialog {
         addRow(form, row++, "Pre-roll (s):", preRollSpinner);
         addRow(form, row++, "Post-roll (s):", postRollSpinner);
         addRow(form, row++, "", skipHungerResetCheck);
-        addRow(form, row++, "", rankedOnlyCheck);
+        addRow(form, row++, "録画対象:", recordRankedCheck);
+        addRow(form, row++, "", recordPrivateCheck);
+        addRow(form, row++, "", recordOtherCheck);
 
         JPanel libraryPanel = new JPanel();
         libraryPanel.setLayout(new BoxLayout(libraryPanel, BoxLayout.X_AXIS));
@@ -129,7 +135,9 @@ public final class SettingsDialog extends JDialog {
         config.preRollSeconds = ((Number) preRollSpinner.getValue()).intValue();
         config.postRollSeconds = ((Number) postRollSpinner.getValue()).intValue();
         config.skipHungerReset = skipHungerResetCheck.isSelected();
-        config.rankedOnly = rankedOnlyCheck.isSelected();
+        config.recordRanked = recordRankedCheck.isSelected();
+        config.recordPrivate = recordPrivateCheck.isSelected();
+        config.recordOther = recordOtherCheck.isSelected();
         String library = libraryDirField.getText().trim();
         config.libraryDir = library.isEmpty() ? null : library;
         config.save();

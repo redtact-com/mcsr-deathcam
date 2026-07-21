@@ -165,8 +165,12 @@ public final class DeathCamApp {
         session = next;
         sessionStartMillis = System.currentTimeMillis();
 
-        boolean record = !config.rankedOnly || next.isRanked();
-        window.setWorldStatus(next.worldName() + (record ? "" : " (非ranked: 記録オフ)"));
+        // Ranked vs private is unknown until the match is queried, so arm recording if the
+        // world could belong to any enabled category; a wrong-type clip is pruned post-match.
+        boolean record = next.isRanked()
+                ? (config.recordRanked || config.recordPrivate)
+                : config.recordOther;
+        window.setWorldStatus(next.worldName() + (record ? "" : " (記録オフ)"));
         if (!record) {
             return;
         }
@@ -429,11 +433,54 @@ public final class DeathCamApp {
                     }
                 }
             }
+            // Prune clips whose confirmed type the user isn't recording.
+            for (DeathRecord r : store.listRecent(100)) {
+                if (r.detectedAtMillis >= cutoff && shouldPrune(r)) {
+                    prune(r);
+                    changed = true;
+                }
+            }
             if (changed) {
                 window.refreshRecords();
             }
         } catch (Throwable t) {
             System.err.println("[app] enrichPending failed: " + t);
+        }
+    }
+
+    /** A recorded death whose now-known match type is switched off in the config. */
+    private boolean shouldPrune(DeathRecord rec) {
+        if (rec.matchType == null) {
+            return false;   // unknown type (practice/non-ranked) — keep
+        }
+        if (rec.matchType == 2 && !config.recordRanked) {
+            return true;
+        }
+        return rec.matchType == 3 && !config.recordPrivate;
+    }
+
+    /** Remove a death entirely: clip file, archived replay, and DB row. */
+    private void prune(DeathRecord rec) {
+        deleteFileQuietly(rec.clipPath);
+        deleteFileQuietly(rec.rrfPath);
+        if (rec.id != 0) {
+            store.delete(rec.id);
+        }
+        synchronized (this) {
+            currentWorldRecords.removeIf(r -> r.id == rec.id);
+        }
+        System.out.println("[app] pruned " + rec.cause + " clip ("
+                + (rec.matchType == 2 ? "ranked" : "private") + " recording is off)");
+    }
+
+    private static void deleteFileQuietly(String path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Path.of(path));
+        } catch (Exception e) {
+            System.err.println("[app] could not delete " + path + ": " + e);
         }
     }
 
