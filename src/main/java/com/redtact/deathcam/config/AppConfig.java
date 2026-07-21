@@ -27,6 +27,18 @@ public class AppConfig {
     /** Automatically start OBS's replay buffer when connected. Off = you start it in OBS. */
     public boolean autoStartReplayBuffer = true;
 
+    /**
+     * Clip-only recording resolution, e.g. "1280x720"; empty = leave OBS as-is. Applied to OBS's
+     * *recording* rescale (Advanced output mode) only, so streaming is untouched. Downscale-only:
+     * ignored if larger than OBS's base canvas.
+     */
+    public String clipRescaleRes = "";
+
+    /** Auto-delete the oldest clip videos once the library exceeds {@link #maxLibraryGb}. */
+    public boolean retentionEnabled = false;
+    /** Total size cap for saved clip videos, in GB (metadata rows and .rrf are kept). */
+    public double maxLibraryGb = 5.0;
+
     /** Skip recording when the respawn point is a bed/anchor (intentional hunger reset). */
     public boolean skipHungerReset = true;
 

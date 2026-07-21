@@ -6,6 +6,7 @@ import io.obswebsocket.community.client.OBSRemoteController;
 import io.obswebsocket.community.client.message.event.outputs.ReplayBufferSavedEvent;
 import io.obswebsocket.community.client.message.event.outputs.ReplayBufferStateChangedEvent;
 import io.obswebsocket.community.client.message.response.config.GetProfileParameterResponse;
+import io.obswebsocket.community.client.message.response.config.GetVideoSettingsResponse;
 
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -39,8 +40,11 @@ public final class ObsController implements ObsGateway {
     private volatile boolean connected;
     private volatile boolean bufferActive;
     private volatile int bufferSeconds = -1;   // OBS RecRBTime; -1 = unknown
+    private volatile int baseWidth = -1;
+    private volatile int baseHeight = -1;
     private volatile Consumer<String> statusListener = s -> { };
     private volatile IntConsumer bufferSecondsListener = s -> { };
+    private volatile Consumer<String> resolutionListener = s -> { };
 
     public ObsController(AppConfig config) {
         this.config = config;
@@ -58,6 +62,16 @@ public final class ObsController implements ObsGateway {
     /** Last-read OBS replay-buffer length in seconds, or -1 if unknown. */
     public int obsBufferSeconds() {
         return bufferSeconds;
+    }
+
+    /** Notified with a human-readable clip-resolution status/warning. */
+    public void setResolutionListener(Consumer<String> listener) {
+        this.resolutionListener = listener;
+    }
+
+    /** OBS base canvas resolution as "WxH", or null if unknown. */
+    public String obsBaseResolution() {
+        return (baseWidth > 0 && baseHeight > 0) ? baseWidth + "x" + baseHeight : null;
     }
 
     @Override
@@ -117,7 +131,101 @@ public final class ObsController implements ObsGateway {
         connected = true;
         status("接続済み");
         refreshBufferSeconds();
+        refreshVideoSettings();
         ensureReplayBufferStarted();
+        applyClipResolution();
+    }
+
+    /** Read OBS's base canvas resolution for downscale validation. */
+    private void refreshVideoSettings() {
+        OBSRemoteController c = controller;
+        if (c == null || !connected) {
+            return;
+        }
+        c.getVideoSettings(vs -> {
+            if (vs == null) {
+                return;
+            }
+            baseWidth = num(vs.getBaseWidth());
+            baseHeight = num(vs.getBaseHeight());
+        });
+    }
+
+    /**
+     * Apply the clip-only recording resolution via OBS's Advanced-mode recording rescale
+     * (RecRescale/RecRescaleRes), which affects the recording/replay-buffer output only —
+     * streaming is untouched. Downscale-only: refuses to exceed the base canvas. Called on
+     * connect and whenever the setting changes.
+     */
+    public void applyClipResolution() {
+        OBSRemoteController c = controller;
+        if (c == null || !connected) {
+            return;
+        }
+        String res = config.clipRescaleRes == null ? "" : config.clipRescaleRes.trim();
+        c.getProfileParameter("Output", "Mode", modeResp -> {
+            boolean advanced = modeResp != null && "Advanced".equalsIgnoreCase(effectiveValue(modeResp));
+            if (res.isEmpty()) {
+                if (advanced) {
+                    c.setProfileParameter("AdvOut", "RecRescale", "false", r -> { });
+                }
+                resStatus("録画解像度: OBS のまま");
+                return;
+            }
+            if (!advanced) {
+                resStatus("⚠ clip 解像度には OBS の詳細(Advanced)出力モードが必要です");
+                return;
+            }
+            int[] wh = parseRes(res);
+            if (wh == null) {
+                resStatus("解像度の指定が不正: " + res);
+                return;
+            }
+            if (baseWidth > 0 && baseHeight > 0 && (wh[0] > baseWidth || wh[1] > baseHeight)) {
+                resStatus("⚠ アップスケール不可: base " + baseWidth + "x" + baseHeight + " 以下にしてください");
+                return;
+            }
+            c.setProfileParameter("AdvOut", "RecRescale", "true", r1 ->
+                    c.setProfileParameter("AdvOut", "RecRescaleRes", res, r2 -> {
+                        restartBufferForResolution();
+                        resStatus("録画解像度: " + res + " (配信は不変)");
+                    }));
+        });
+    }
+
+    /** A resolution change only takes effect on a fresh output — bounce the replay buffer. */
+    private void restartBufferForResolution() {
+        OBSRemoteController c = controller;
+        if (c == null || !connected || !bufferActive) {
+            return;
+        }
+        c.stopReplayBuffer(s -> scheduler.schedule(this::ensureReplayBufferStarted, 2, TimeUnit.SECONDS));
+    }
+
+    private void resStatus(String s) {
+        try {
+            resolutionListener.accept(s);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static int num(Number n) {
+        return n == null ? -1 : n.intValue();
+    }
+
+    private static int[] parseRes(String res) {
+        int x = res.toLowerCase().indexOf('x');
+        if (x <= 0 || x >= res.length() - 1) {
+            return null;
+        }
+        try {
+            return new int[] {
+                    Integer.parseInt(res.substring(0, x).trim()),
+                    Integer.parseInt(res.substring(x + 1).trim()),
+            };
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** Read OBS's active-mode RecRBTime and publish it to the listener. */

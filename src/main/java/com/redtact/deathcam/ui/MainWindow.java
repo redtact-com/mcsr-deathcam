@@ -60,16 +60,28 @@ public final class MainWindow extends JFrame {
     private final JLabel footer = new JLabel(" ");
 
     private volatile Runnable dashboardOpener;
+    private volatile Runnable onSettingsSaved;
     private volatile java.util.function.IntSupplier obsBufferSupplier = () -> -1;
+    private volatile java.util.function.Supplier<String> obsBaseResSupplier = () -> null;
 
     /** Called by the pipeline once the embedded web server is up. */
     public void setDashboardOpener(Runnable opener) {
         this.dashboardOpener = opener;
     }
 
+    /** Invoked (off the EDT is the caller's concern) after the settings dialog saves. */
+    public void setOnSettingsSaved(Runnable r) {
+        this.onSettingsSaved = r;
+    }
+
     /** Live source of OBS's replay-buffer length (seconds), for the settings dialog. */
     public void setObsBufferSupplier(java.util.function.IntSupplier supplier) {
         this.obsBufferSupplier = supplier;
+    }
+
+    /** Live source of OBS's base canvas resolution ("WxH"), for the settings dialog. */
+    public void setObsBaseResSupplier(java.util.function.Supplier<String> supplier) {
+        this.obsBaseResSupplier = supplier;
     }
 
     /** Show OBS's current replay-buffer length as a hint on the recording row. */
@@ -160,8 +172,16 @@ public final class MainWindow extends JFrame {
         col.add(Box.createVerticalStrut(8));
 
         JButton settings = ghostButton("設定");
-        settings.addActionListener(e ->
-                new SettingsDialog(this, config, this::refreshRecords, obsBufferSupplier).setVisible(true));
+        settings.addActionListener(e -> {
+            Runnable saved = () -> {
+                refreshRecords();
+                Runnable r = onSettingsSaved;
+                if (r != null) {
+                    r.run();
+                }
+            };
+            new SettingsDialog(this, config, saved, obsBufferSupplier, obsBaseResSupplier).setVisible(true);
+        });
         JButton folder = ghostButton("フォルダ");
         folder.addActionListener(e -> openLibraryFolder());
         JButton refresh = ghostButton("更新");

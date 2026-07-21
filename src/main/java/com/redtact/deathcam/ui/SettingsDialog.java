@@ -7,6 +7,7 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
@@ -30,9 +31,12 @@ public final class SettingsDialog extends JDialog {
     /** Recommended latency headroom between pre+post and the OBS buffer (mirrors DeathCamApp). */
     private static final int BUFFER_MARGIN_SECONDS = 5;
 
+    private static final String[] RES_PRESETS = {"そのまま", "1280x720", "854x480", "640x360"};
+
     private final AppConfig config;
     private final Runnable onSaved;
     private final java.util.function.IntSupplier obsBufferSeconds;
+    private final java.util.function.Supplier<String> obsBaseRes;
 
     private final JTextField obsHostField;
     private final JSpinner obsPortSpinner;
@@ -41,6 +45,10 @@ public final class SettingsDialog extends JDialog {
     private final JSpinner postRollSpinner;
     private final JCheckBox autoStartBufferCheck;
     private final JLabel bufferHintLabel = new JLabel(" ");
+    private final JComboBox<String> clipResCombo;
+    private final JLabel resHintLabel = new JLabel(" ");
+    private final JCheckBox retentionCheck;
+    private final JSpinner maxGbSpinner;
     private final JCheckBox skipHungerResetCheck;
     private final JCheckBox recordRankedCheck;
     private final JCheckBox recordPrivateCheck;
@@ -48,15 +56,17 @@ public final class SettingsDialog extends JDialog {
     private final JTextField libraryDirField;
 
     public SettingsDialog(Window owner, AppConfig config, Runnable onSaved) {
-        this(owner, config, onSaved, () -> -1);
+        this(owner, config, onSaved, () -> -1, () -> null);
     }
 
     public SettingsDialog(Window owner, AppConfig config, Runnable onSaved,
-                          java.util.function.IntSupplier obsBufferSeconds) {
+                          java.util.function.IntSupplier obsBufferSeconds,
+                          java.util.function.Supplier<String> obsBaseRes) {
         super(owner, "設定", ModalityType.APPLICATION_MODAL);
         this.config = config;
         this.onSaved = onSaved;
         this.obsBufferSeconds = obsBufferSeconds;
+        this.obsBaseRes = obsBaseRes;
 
         obsHostField = new JTextField(config.obsHost, 20);
         obsPortSpinner = new JSpinner(new SpinnerNumberModel(config.obsPort, 1, 65535, 1));
@@ -66,6 +76,13 @@ public final class SettingsDialog extends JDialog {
         autoStartBufferCheck = new JCheckBox("リプレイバッファを自動起動", config.autoStartReplayBuffer);
         preRollSpinner.addChangeListener(e -> updateBufferHint());
         postRollSpinner.addChangeListener(e -> updateBufferHint());
+        clipResCombo = new JComboBox<>(RES_PRESETS);
+        clipResCombo.setEditable(true);
+        selectClipRes();
+        clipResCombo.addActionListener(e -> updateResHint());
+        retentionCheck = new JCheckBox("合計サイズ上限を超えたら古い動画を削除 (メタデータは保持)",
+                config.retentionEnabled);
+        maxGbSpinner = new JSpinner(new SpinnerNumberModel(config.maxLibraryGb, 0.1, 10000.0, 0.5));
         skipHungerResetCheck = new JCheckBox("ハンガーリセット時はスキップ", config.skipHungerReset);
         recordRankedCheck = new JCheckBox("ランクマを記録 (type 2)", config.recordRanked);
         recordPrivateCheck = new JCheckBox("プライベートを記録 (type 3)", config.recordPrivate);
@@ -82,11 +99,16 @@ public final class SettingsDialog extends JDialog {
         addRow(form, row++, "Post-roll (s):", postRollSpinner);
         addRow(form, row++, "", autoStartBufferCheck);
         addRow(form, row++, "", bufferHintLabel);
+        addRow(form, row++, "clip 解像度:", clipResCombo);
+        addRow(form, row++, "", resHintLabel);
+        addRow(form, row++, "容量削減:", retentionCheck);
+        addRow(form, row++, "上限 (GB):", maxGbSpinner);
         addRow(form, row++, "", skipHungerResetCheck);
         addRow(form, row++, "録画対象:", recordRankedCheck);
         addRow(form, row++, "", recordPrivateCheck);
         addRow(form, row++, "", recordOtherCheck);
         updateBufferHint();
+        updateResHint();
 
         JPanel libraryPanel = new JPanel();
         libraryPanel.setLayout(new BoxLayout(libraryPanel, BoxLayout.X_AXIS));
@@ -125,6 +147,37 @@ public final class SettingsDialog extends JDialog {
         c.fill = GridBagConstraints.HORIZONTAL;
         c.weightx = 1.0;
         form.add(field, c);
+    }
+
+    private void selectClipRes() {
+        String cur = config.clipRescaleRes == null ? "" : config.clipRescaleRes.trim();
+        if (cur.isEmpty()) {
+            clipResCombo.setSelectedItem("そのまま");
+        } else {
+            clipResCombo.setSelectedItem(cur);   // editable combo accepts custom "WxH"
+        }
+    }
+
+    private String selectedClipRes() {
+        Object v = clipResCombo.getSelectedItem();
+        String s = v == null ? "" : v.toString().trim();
+        return ("そのまま".equals(s) || s.isEmpty()) ? "" : s;
+    }
+
+    /** Live hint under the clip-resolution combo: shows OBS base res and the downscale rule. */
+    private void updateResHint() {
+        String base = obsBaseRes.get();
+        String sel = selectedClipRes();
+        if (sel.isEmpty()) {
+            resHintLabel.setText("<html>OBS の解像度そのまま"
+                    + (base != null ? "（OBS base " + base + "）" : "") + "</html>");
+            resHintLabel.setForeground(new java.awt.Color(0x8A8781));
+        } else {
+            resHintLabel.setText("<html>clip のみ " + sel + " で録画（配信は不変）。"
+                    + "<b>OBS を詳細(Advanced)出力モード</b>に"
+                    + (base != null ? "。base " + base + " 以下のみ" : "") + "</html>");
+            resHintLabel.setForeground(new java.awt.Color(0xE5B64F));
+        }
     }
 
     /** Live hint under the roll spinners: compares pre+post against OBS's buffer length. */
@@ -174,6 +227,9 @@ public final class SettingsDialog extends JDialog {
         config.preRollSeconds = ((Number) preRollSpinner.getValue()).intValue();
         config.postRollSeconds = ((Number) postRollSpinner.getValue()).intValue();
         config.autoStartReplayBuffer = autoStartBufferCheck.isSelected();
+        config.clipRescaleRes = selectedClipRes();
+        config.retentionEnabled = retentionCheck.isSelected();
+        config.maxLibraryGb = ((Number) maxGbSpinner.getValue()).doubleValue();
         config.skipHungerReset = skipHungerResetCheck.isSelected();
         config.recordRanked = recordRankedCheck.isSelected();
         config.recordPrivate = recordPrivateCheck.isSelected();

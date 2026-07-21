@@ -19,6 +19,8 @@ Death dashcam for [MCSR Ranked](https://mcsrranked.com/) — automatically clips
 - Archives the official ranked replay `.rrf` for each death match before the mod rotates it away, so you can rewatch the match in-game from any perspective later.
 - Skips intentional hunger-reset deaths (respawn point is a bed/anchor) — configurable.
 - Per-world-type recording toggles: ranked (type 2), private room (type 3), and other worlds (practice maps / singleplayer). Ranked and private are the same `mcsrranked #…` world and can only be told apart after the match, so a clip of a type you've turned off is recorded first and then deleted automatically once the API confirms its type.
+- **Clip-only resolution** (downscale-only): record clips at a lower resolution than your stream to save space. The app sets OBS's *recording* rescale (Advanced output mode), which affects the replay buffer only — your streaming resolution is untouched. Requires OBS to be in Advanced output mode; it never upscales past your base canvas.
+- **Storage cap** (容量削減): optionally keep the clips folder under a size limit (GB). When exceeded, the oldest clip **videos** are deleted while their death records — cause, phase, IGT, seed, coordinates and any `.rrf` — are kept, so your statistics survive.
 - SQLite-backed library with a Swing UI.
 
 ## Metadata sources

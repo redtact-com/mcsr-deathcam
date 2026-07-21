@@ -98,7 +98,10 @@ public final class DeathCamApp {
             window.setObsBufferSeconds(secs);
             warnIfBufferShort(secs);
         });
+        obs.setResolutionListener(window::setBufferStatus);
         window.setObsBufferSupplier(obs::obsBufferSeconds);
+        window.setObsBaseResSupplier(obs::obsBaseResolution);
+        window.setOnSettingsSaved(this::onSettingsChanged);
         obs.start();
         worldTracker.start();
         startDashboard();
@@ -197,6 +200,35 @@ public final class DeathCamApp {
      * that window forward, so if OBS's buffer isn't comfortably longer than pre+post the lead-in
      * gets clipped. Warn the user to enlarge the OBS buffer.
      */
+    /** React to a settings change: re-apply OBS clip resolution, re-validate, enforce retention. */
+    private void onSettingsChanged() {
+        obs.applyClipResolution();
+        warnIfBufferShort(obs.obsBufferSeconds());
+        scheduler.execute(this::enforceRetention);
+    }
+
+    /**
+     * Keep the clips folder under the configured size cap by deleting the oldest videos.
+     * Only the video files are removed — the death records (metadata) and any .rrf are kept,
+     * so statistics and seed/coord data survive; the row's clipPath is cleared.
+     */
+    private void enforceRetention() {
+        if (!config.retentionEnabled || config.maxLibraryGb <= 0) {
+            return;
+        }
+        try {
+            long cap = (long) (config.maxLibraryGb * 1024L * 1024L * 1024L);
+            int removed = RetentionPolicy.enforce(store, cap);
+            if (removed > 0) {
+                System.out.println("[app] retention: removed " + removed
+                        + " old clip video(s); metadata kept");
+                window.refreshRecords();
+            }
+        } catch (Exception e) {
+            System.err.println("[app] retention failed: " + e);
+        }
+    }
+
     private void warnIfBufferShort(int obsBufferSeconds) {
         if (obsBufferSeconds <= 0) {
             return;
@@ -289,6 +321,7 @@ public final class DeathCamApp {
                 store.update(rec);
                 window.setBufferStatus("クリップ保存: " + dest.getFileName());
                 window.refreshRecords();
+                enforceRetention();
             } catch (IOException e) {
                 System.err.println("[app] clip move failed: " + e);
                 rec.clipPath = savedPath.toString();
@@ -469,6 +502,7 @@ public final class DeathCamApp {
             if (changed) {
                 window.refreshRecords();
             }
+            enforceRetention();
         } catch (Throwable t) {
             System.err.println("[app] enrichPending failed: " + t);
         }
