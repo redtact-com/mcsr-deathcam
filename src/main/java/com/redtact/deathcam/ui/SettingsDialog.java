@@ -37,6 +37,7 @@ public final class SettingsDialog extends JDialog {
     private final Runnable onSaved;
     private final java.util.function.IntSupplier obsBufferSeconds;
     private final java.util.function.Supplier<String> obsBaseRes;
+    private final java.util.function.Supplier<String> obsClipResStatus;
 
     private final JTextField obsHostField;
     private final JSpinner obsPortSpinner;
@@ -56,17 +57,19 @@ public final class SettingsDialog extends JDialog {
     private final JTextField libraryDirField;
 
     public SettingsDialog(Window owner, AppConfig config, Runnable onSaved) {
-        this(owner, config, onSaved, () -> -1, () -> null);
+        this(owner, config, onSaved, () -> -1, () -> null, () -> null);
     }
 
     public SettingsDialog(Window owner, AppConfig config, Runnable onSaved,
                           java.util.function.IntSupplier obsBufferSeconds,
-                          java.util.function.Supplier<String> obsBaseRes) {
+                          java.util.function.Supplier<String> obsBaseRes,
+                          java.util.function.Supplier<String> obsClipResStatus) {
         super(owner, "設定", ModalityType.APPLICATION_MODAL);
         this.config = config;
         this.onSaved = onSaved;
         this.obsBufferSeconds = obsBufferSeconds;
         this.obsBaseRes = obsBaseRes;
+        this.obsClipResStatus = obsClipResStatus;
 
         obsHostField = new JTextField(config.obsHost, 20);
         obsPortSpinner = new JSpinner(new SpinnerNumberModel(config.obsPort, 1, 65535, 1));
@@ -164,20 +167,43 @@ public final class SettingsDialog extends JDialog {
         return ("そのまま".equals(s) || s.isEmpty()) ? "" : s;
     }
 
-    /** Live hint under the clip-resolution combo: shows OBS base res and the downscale rule. */
+    /**
+     * Hint under the clip-resolution combo. The first line is neutral guidance; the second line
+     * reflects OBS's ACTUAL last apply status (green when applied, amber on a real problem) so it
+     * isn't a static warning that never clears.
+     */
     private void updateResHint() {
         String base = obsBaseRes.get();
         String sel = selectedClipRes();
+        String state = obsClipResStatus.get();
+
+        StringBuilder sb = new StringBuilder("<html><div style='width:420px'>");
         if (sel.isEmpty()) {
-            resHintLabel.setText("<html>OBS の解像度そのまま"
-                    + (base != null ? "（OBS base " + base + "）" : "") + "</html>");
-            resHintLabel.setForeground(new java.awt.Color(0x8A8781));
+            sb.append("OBS の解像度そのまま");
+            if (base != null) {
+                sb.append("（OBS base ").append(base).append("）");
+            }
         } else {
-            resHintLabel.setText("<html>clip のみ " + sel + " で録画（配信は不変）。"
-                    + "<b>OBS を詳細(Advanced)出力モード</b>に"
-                    + (base != null ? "。base " + base + " 以下のみ" : "") + "</html>");
-            resHintLabel.setForeground(new java.awt.Color(0xE5B64F));
+            sb.append("clip のみ ").append(sel).append(" で録画（配信は不変）。要: OBS 詳細出力モード＋録画エンコーダを配信と別に");
+            if (base != null) {
+                sb.append("。base ").append(base).append(" 以下のみ");
+            }
         }
+        if (state != null && !state.isBlank()) {
+            sb.append("<br>OBS 現在: ").append(state);
+        }
+        sb.append("</div></html>");
+        resHintLabel.setText(sb.toString());
+
+        java.awt.Color color = new java.awt.Color(0x8A8781);   // neutral guidance
+        if (state != null) {
+            if (state.startsWith("⚠")) {
+                color = new java.awt.Color(0xE5B64F);
+            } else if (state.startsWith("✓")) {
+                color = new java.awt.Color(0x5DA84E);
+            }
+        }
+        resHintLabel.setForeground(color);
     }
 
     /** Live hint under the roll spinners: compares pre+post against OBS's buffer length. */

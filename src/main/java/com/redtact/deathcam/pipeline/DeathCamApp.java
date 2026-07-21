@@ -101,6 +101,7 @@ public final class DeathCamApp {
         obs.setResolutionListener(window::setBufferStatus);
         window.setObsBufferSupplier(obs::obsBufferSeconds);
         window.setObsBaseResSupplier(obs::obsBaseResolution);
+        window.setObsClipResStatusSupplier(obs::obsClipResStatus);
         window.setOnSettingsSaved(this::onSettingsChanged);
         obs.start();
         worldTracker.start();

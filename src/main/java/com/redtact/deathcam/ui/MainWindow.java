@@ -63,6 +63,7 @@ public final class MainWindow extends JFrame {
     private volatile Runnable onSettingsSaved;
     private volatile java.util.function.IntSupplier obsBufferSupplier = () -> -1;
     private volatile java.util.function.Supplier<String> obsBaseResSupplier = () -> null;
+    private volatile java.util.function.Supplier<String> obsClipResStatusSupplier = () -> null;
 
     /** Called by the pipeline once the embedded web server is up. */
     public void setDashboardOpener(Runnable opener) {
@@ -82,6 +83,11 @@ public final class MainWindow extends JFrame {
     /** Live source of OBS's base canvas resolution ("WxH"), for the settings dialog. */
     public void setObsBaseResSupplier(java.util.function.Supplier<String> supplier) {
         this.obsBaseResSupplier = supplier;
+    }
+
+    /** Live source of the clip-resolution apply status, for the settings dialog. */
+    public void setObsClipResStatusSupplier(java.util.function.Supplier<String> supplier) {
+        this.obsClipResStatusSupplier = supplier;
     }
 
     /** Show OBS's current replay-buffer length as a hint on the recording row. */
@@ -180,7 +186,8 @@ public final class MainWindow extends JFrame {
                     r.run();
                 }
             };
-            new SettingsDialog(this, config, saved, obsBufferSupplier, obsBaseResSupplier).setVisible(true);
+            new SettingsDialog(this, config, saved, obsBufferSupplier, obsBaseResSupplier,
+                    obsClipResStatusSupplier).setVisible(true);
         });
         JButton folder = ghostButton("フォルダ");
         folder.addActionListener(e -> openLibraryFolder());
