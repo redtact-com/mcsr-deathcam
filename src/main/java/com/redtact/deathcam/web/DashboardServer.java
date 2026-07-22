@@ -95,7 +95,9 @@ public final class DashboardServer {
             if (path.equals("/api/records")) {
                 handleRecords(exchange);
             } else if (path.equals("/api/openapi.yaml")) {
-                handleStatic(exchange, "/openapi.yaml");     // OpenAPI 3 spec, bundled
+                handleStatic(exchange, "/openapi.yaml");     // this app's OpenAPI 3 spec
+            } else if (path.equals("/api/mcsrranked.yaml")) {
+                handleStatic(exchange, "/mcsrranked.yaml");  // vendored official MCSR Ranked spec
             } else if (path.equals("/api/docs") || path.equals("/api/docs/")) {
                 handleStatic(exchange, "/swagger/index.html"); // self-contained Swagger UI
             } else if (path.startsWith("/media/clip/")) {

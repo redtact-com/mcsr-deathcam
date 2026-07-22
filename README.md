@@ -47,8 +47,10 @@ Notes:
 
 The embedded dashboard server exposes a small REST API, described by an OpenAPI 3 document:
 
-- `GET /api/docs` — **Swagger UI**, bundled in the jar (no CDN); browse and try the API
-- `GET /api/openapi.yaml` — the OpenAPI 3 spec
+- `GET /api/docs` — **Swagger UI**, bundled in the jar (no CDN), light theme. The "Select a
+  definition" dropdown switches between **this app's API** and the **official MCSR Ranked API**.
+- `GET /api/openapi.yaml` — this app's OpenAPI 3 spec
+- `GET /api/mcsrranked.yaml` — the vendored official MCSR Ranked spec
 - `GET /api/records` — all death records (the `DeathRecord` schema)
 - `GET /media/clip/{id}` — stream a clip (supports HTTP Range)
 
@@ -56,7 +58,10 @@ The external MCSR Ranked API this app consumes is pinned to its official spec at
 [`openapi/mcsrranked.yaml`](openapi/mcsrranked.yaml) (from `MCSR-Ranked/api-docs`); a contract test
 checks the fields `RankedApiClient` reads are still present in it.
 
-## Building
+## Getting the jar
+
+Every push builds the fat jar in CI and uploads it as an artifact — grab the latest from the
+repo's **Actions** tab → newest run → **Artifacts → `mcsr-deathcam-jar`**. Or build locally:
 
 ```
 ./gradlew shadowJar

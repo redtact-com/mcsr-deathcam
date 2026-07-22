@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.redtact'
-version = '0.1.6'
+version = '0.1.7'
 
 java {
     toolchain {
@@ -44,6 +44,12 @@ application {
 
 test {
     useJUnitPlatform()
+}
+
+// Bundle the vendored MCSR Ranked OpenAPI spec (canonical copy stays in openapi/)
+// so the dashboard can serve it at /api/mcsrranked.yaml.
+processResources {
+    from('openapi/mcsrranked.yaml') { into 'web' }
 }
 
 shadowJar {
