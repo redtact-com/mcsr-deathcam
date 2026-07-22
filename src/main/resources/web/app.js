@@ -14,7 +14,7 @@ const PHASES = [
   { id: 'UNKNOWN',    label: '?',         ja: '不明',       color: '#6b6a72' },
 ];
 const PHASE_BY_ID = Object.fromEntries(PHASES.map(p => [p.id, p]));
-const INK2 = '#b9b7ae', INK3 = '#8a887f', GRID = '#26262c', REC = '#e0584f', STEEL = '#7f9cc0';
+const INK2 = '#585e6b', INK3 = '#969ba7', GRID = '#ece6dd', REC = '#ef4a2c', STEEL = '#6b8fb8';
 const MONO = "'JetBrains Mono', ui-monospace, monospace";
 
 /* ---------- i18n ---------- */
@@ -535,15 +535,15 @@ function baseOpts() {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#1d1d24',
-        borderColor: 'rgba(255,255,255,0.14)',
+        backgroundColor: '#ffffff',
+        borderColor: '#e0d9cd',
         borderWidth: 1,
-        titleColor: '#f2f1ee',
+        titleColor: '#20242e',
         bodyColor: INK2,
         titleFont: { family: MONO, size: 11 },
         bodyFont: { family: MONO, size: 11 },
         padding: 8,
-        cornerRadius: 3,
+        cornerRadius: 8,
         displayColors: true,
         boxWidth: 8, boxHeight: 8, boxPadding: 3,
       },
@@ -553,7 +553,7 @@ function baseOpts() {
 const axis = extra => Object.assign({
   ticks: { color: INK3, font: { family: MONO, size: 10 } },
   grid: { color: GRID, drawTicks: false },
-  border: { color: '#383840' },
+  border: { color: '#e0d9cd' },
 }, extra);
 
 function renderStats() {
@@ -620,7 +620,7 @@ function renderPhaseChart(list) {
         datasets: [{
           data: keep.map(x => x.n),
           backgroundColor: keep.map(x => x.p.color),
-          borderColor: '#17171c', borderWidth: 2,   // 2px surface gap
+          borderColor: '#ffffff', borderWidth: 2,   // 2px surface gap
         }],
       },
       options: Object.assign(opts, { cutout: '62%' }),
@@ -714,7 +714,7 @@ function renderTrendChart(list) {
         pointBackgroundColor: REC,
         tension: 0.25,
         fill: { target: 'origin' },
-        backgroundColor: 'rgba(224,88,79,0.09)',
+        backgroundColor: 'rgba(239,74,44,0.10)',
       }],
     },
     options: opts,
@@ -733,7 +733,7 @@ function renderIgtChart(list) {
     label: phaseLabel(p.id),
     data: new Array(maxBin + 1).fill(0),
     backgroundColor: p.color,
-    borderColor: '#17171c', borderWidth: 1,   // surface gap between stacked segments
+    borderColor: '#ffffff', borderWidth: 1,   // surface gap between stacked segments
     maxBarThickness: 26,
   }));
   withIgt.forEach(r => {
@@ -772,7 +772,7 @@ function renderMapChart(list) {
       label: phaseLabel(p.id),
       data: pts.filter(r => r.phase === id).map(r => ({ x: r.deathX, y: -r.deathZ, r })),
       backgroundColor: p.color + 'd9',
-      borderColor: '#17171c', borderWidth: 1,
+      borderColor: '#ffffff', borderWidth: 1,
       pointRadius: 5, pointHoverRadius: 7,
     };
   }).filter(d => d.data.length);
