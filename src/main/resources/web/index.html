@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,41 +18,42 @@
     </svg>
   </div>
   <div class="top-meta">
-    <span id="total-badge" class="badge-mono">0 DEATHS ON RECORD</span>
+    <span id="total-badge" class="badge-mono">—</span>
+    <button id="lang-toggle" class="badge-mono api-link" title="language">EN</button>
     <a class="badge-mono api-link" href="/api/docs" target="_blank" rel="noopener" title="REST API (Swagger UI)">API</a>
   </div>
 </header>
 
 <nav class="tabs" role="tablist">
-  <a href="#library" id="tab-library" class="tab" role="tab">LIBRARY</a>
-  <a href="#stats" id="tab-stats" class="tab" role="tab">STATS</a>
+  <a href="#library" id="tab-library" class="tab" role="tab" data-i18n="tab_library">ライブラリ</a>
+  <a href="#stats" id="tab-stats" class="tab" role="tab" data-i18n="tab_stats">統計</a>
 </nav>
 
 <section class="filterbar" aria-label="filters">
   <div class="f-group" id="range-presets">
-    <button class="f-preset" data-range="7">7D</button>
-    <button class="f-preset" data-range="30">30D</button>
-    <button class="f-preset" data-range="90">90D</button>
-    <button class="f-preset is-on" data-range="all">ALL</button>
+    <button class="f-preset" data-range="7" data-i18n="r7">7日</button>
+    <button class="f-preset" data-range="30" data-i18n="r30">30日</button>
+    <button class="f-preset" data-range="90" data-i18n="r90">90日</button>
+    <button class="f-preset is-on" data-range="all" data-i18n="rall">全期間</button>
   </div>
   <div class="f-group" id="phase-chips" aria-label="phase filter"></div>
   <div class="f-group">
-    <select id="cause-select" class="f-select" aria-label="cause filter"><option value="">ALL CAUSES</option></select>
-    <input id="opponent-input" class="f-input" type="search" placeholder="opponent…" aria-label="opponent filter">
+    <select id="cause-select" class="f-select" aria-label="cause filter"><option value="" data-i18n="all_causes">全死因</option></select>
+    <input id="opponent-input" class="f-input" type="search" data-i18n-ph="opponent_ph" placeholder="対戦相手…" aria-label="opponent filter">
     <select id="sort-select" class="f-select" aria-label="sort">
-      <option value="new">NEWEST</option>
-      <option value="old">OLDEST</option>
-      <option value="igt">IGT ASC</option>
+      <option value="new" data-i18n="sort_new">新しい順</option>
+      <option value="old" data-i18n="sort_old">古い順</option>
+      <option value="igt" data-i18n="sort_igt">IGT 昇順</option>
     </select>
-    <button id="clear-filters" class="f-clear" title="clear filters">RESET</button>
+    <button id="clear-filters" class="f-clear" title="clear filters" data-i18n="reset">リセット</button>
   </div>
 </section>
 
 <main id="view-library" class="view" hidden>
   <div id="card-grid" class="card-grid"></div>
   <div id="library-empty" class="empty" hidden>
-    <div class="empty-code">NO SIGNAL</div>
-    <p>No deaths on record for these filters.<br>Loosen the filters — or go take some damage.</p>
+    <div class="empty-code" data-i18n="empty_code">記録なし</div>
+    <p data-i18n="empty_lib" data-i18n-html>この条件の死亡記録はありません。<br>フィルタをゆるめる — か、死んでこよう。</p>
   </div>
 </main>
 
@@ -60,32 +61,32 @@
   <div class="tile-row" id="tile-row"></div>
 
   <div class="stat-controls">
-    <label>TREND <select id="trend-gran" class="f-select"><option value="day">DAY</option><option value="week">WEEK</option></select></label>
-    <label>IGT BIN <select id="igt-bin" class="f-select"><option value="60">60 s</option><option value="30">30 s</option><option value="120">120 s</option></select></label>
-    <label>CAUSES <select id="cause-topn" class="f-select"><option value="6">TOP 6</option><option value="10">TOP 10</option><option value="0">ALL</option></select></label>
-    <label>PHASE VIEW <select id="phase-style" class="f-select"><option value="bar">BAR</option><option value="donut">DONUT</option></select></label>
-    <label>MAP <select id="map-dim" class="f-select"><option value="nether">NETHER</option><option value="surface">SURFACE</option><option value="end">END</option></select></label>
-    <button id="table-toggle" class="f-clear" aria-pressed="false">TABLE VIEW</button>
+    <label><span data-i18n="ctl_trend">推移</span> <select id="trend-gran" class="f-select"><option value="day" data-i18n="opt_day">日</option><option value="week" data-i18n="opt_week">週</option></select></label>
+    <label><span data-i18n="ctl_igtbin">IGT 幅</span> <select id="igt-bin" class="f-select"><option value="60">60 s</option><option value="30">30 s</option><option value="120">120 s</option></select></label>
+    <label><span data-i18n="ctl_causes">死因</span> <select id="cause-topn" class="f-select"><option value="6" data-i18n="opt_top6">上位6</option><option value="10" data-i18n="opt_top10">上位10</option><option value="0" data-i18n="opt_all">全て</option></select></label>
+    <label><span data-i18n="ctl_phaseview">フェーズ表示</span> <select id="phase-style" class="f-select"><option value="bar" data-i18n="opt_bar">棒</option><option value="donut" data-i18n="opt_donut">ドーナツ</option></select></label>
+    <label><span data-i18n="ctl_map">マップ</span> <select id="map-dim" class="f-select"><option value="nether" data-i18n="map_nether">ネザー</option><option value="surface" data-i18n="map_surface">地上</option><option value="end" data-i18n="map_end">エンド</option></select></label>
+    <button id="table-toggle" class="f-clear" aria-pressed="false" data-i18n="table_view">表で見る</button>
   </div>
 
   <div id="chart-grid" class="chart-grid">
-    <figure class="panel"><figcaption>DEATHS BY PHASE</figcaption><div class="plot"><canvas id="c-phase"></canvas></div></figure>
-    <figure class="panel"><figcaption>DEATH CAUSES</figcaption><div class="plot"><canvas id="c-cause"></canvas></div></figure>
-    <figure class="panel wide"><figcaption>DEATHS OVER TIME</figcaption><div class="plot"><canvas id="c-trend"></canvas></div></figure>
-    <figure class="panel"><figcaption>IGT AT DEATH <span class="cap-note">stacked by phase</span></figcaption><div class="plot"><canvas id="c-igt"></canvas></div></figure>
-    <figure class="panel"><figcaption>DEATH MAP <span class="cap-note" id="map-note">nether · x/z</span></figcaption><div class="plot"><canvas id="c-map"></canvas></div></figure>
+    <figure class="panel"><figcaption data-i18n="stat_by_phase">フェーズ別 死亡</figcaption><div class="plot"><canvas id="c-phase"></canvas></div></figure>
+    <figure class="panel"><figcaption data-i18n="stat_causes">死因</figcaption><div class="plot"><canvas id="c-cause"></canvas></div></figure>
+    <figure class="panel wide"><figcaption data-i18n="stat_over_time">死亡の推移</figcaption><div class="plot"><canvas id="c-trend"></canvas></div></figure>
+    <figure class="panel"><figcaption><span data-i18n="stat_igt">死亡 IGT</span> <span class="cap-note" data-i18n="stat_igt_note">フェーズ別 積み上げ</span></figcaption><div class="plot"><canvas id="c-igt"></canvas></div></figure>
+    <figure class="panel"><figcaption><span data-i18n="stat_map">死亡マップ</span> <span class="cap-note" id="map-note">ネザー · x/z</span></figcaption><div class="plot"><canvas id="c-map"></canvas></div></figure>
   </div>
   <div id="phase-legend" class="phase-legend" aria-hidden="false"></div>
 
   <div id="stats-table-wrap" class="table-wrap" hidden>
     <table id="stats-table">
-      <thead><tr><th>DATE</th><th>PHASE</th><th>CAUSE</th><th>KILLER</th><th>IGT</th><th>POS</th><th>OPPONENT</th><th>WORLD</th></tr></thead>
+      <thead><tr><th data-i18n="th_date">日時</th><th data-i18n="th_phase">フェーズ</th><th data-i18n="th_cause">死因</th><th data-i18n="th_killer">相手</th><th>IGT</th><th data-i18n="th_pos">座標</th><th data-i18n="th_opponent">対戦相手</th><th data-i18n="th_world">ワールド</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
   <div id="stats-empty" class="empty" hidden>
-    <div class="empty-code">NO SIGNAL</div>
-    <p>Nothing to aggregate for these filters.</p>
+    <div class="empty-code" data-i18n="empty_code">記録なし</div>
+    <p data-i18n="empty_stats">集計できるデータがありません。</p>
   </div>
 </main>
 
@@ -94,20 +95,18 @@
     <div class="watch-main">
       <div class="watch-video">
         <video id="video" controls preload="metadata"></video>
-        <div id="mkv-warning" class="mkv-warning" hidden>
-          ⚠ This clip is <b>.mkv</b> — some browsers can't play it. Set OBS → Settings → Output → Recording Format to <b>Fragmented MP4</b> for future clips.
-        </div>
+        <div id="mkv-warning" class="mkv-warning" hidden data-i18n="mkv_warn" data-i18n-html>⚠ このクリップは <b>.mkv</b> です。再生できないブラウザがあります。OBS → 設定 → 出力 → 録画フォーマットを <b>Fragmented MP4</b> にすると次から再生できます。</div>
         <div class="transport">
           <button data-seek="-5">−5s</button>
           <button data-seek="-1">−1s</button>
-          <button data-frame="-1" title=", key">◂ frame</button>
-          <button data-frame="1" title=". key">frame ▸</button>
+          <button data-frame="-1" title=", key">◂ <span data-i18n="frame">コマ</span></button>
+          <button data-frame="1" title=". key"><span data-i18n="frame">コマ</span> ▸</button>
           <button data-seek="1">+1s</button>
           <button data-seek="5">+5s</button>
           <select id="speed" aria-label="playback speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
           <span class="spacer"></span>
-          <button id="prev-death" title="↑">▲ PREV</button>
-          <button id="next-death" title="↓">▼ NEXT</button>
+          <button id="prev-death" title="↑">▲ <span data-i18n="prev">前へ</span></button>
+          <button id="next-death" title="↓">▼ <span data-i18n="next">次へ</span></button>
         </div>
       </div>
 
@@ -126,31 +125,31 @@
         <blockquote id="t-raw" class="t-raw">—</blockquote>
         <dl class="t-grid">
           <dt>IGT</dt><dd id="t-igt" class="mono amber">—</dd>
-          <dt>POS</dt><dd id="t-pos" class="mono">—</dd>
-          <dt>MATCH</dt><dd id="t-match" class="mono">—</dd>
-          <dt>WORLD</dt><dd id="t-world" class="mono small">—</dd>
-          <dt title="Overworld structure type">SEED TYPE</dt><dd id="t-seedtype" class="mono small">—</dd>
-          <dt>BASTION</dt><dd id="t-bastion" class="mono small">—</dd>
-          <dt title="Obsidian tower heights">END TOWERS</dt><dd id="t-towers" class="mono small">—</dd>
-          <dt title="MCSR seed identifier — not the numeric Minecraft seed">SEED ID <span class="dt-note">(MCSR)</span></dt><dd class="mono small copyable" id="t-seedid">—</dd>
-          <dt title="Numeric Minecraft seed (real ranked / .rrf only)">SEED OW <span class="dt-note">(num)</span></dt><dd class="mono small copyable" id="t-seed-ow">—</dd>
-          <dt>SEED NET</dt><dd class="mono small copyable" id="t-seed-net">—</dd>
-          <dt>SEED END</dt><dd class="mono small copyable" id="t-seed-end">—</dd>
-          <dt>REPLAY</dt><dd id="t-rrf" class="mono small">—</dd>
+          <dt data-i18n="pos">座標</dt><dd id="t-pos" class="mono">—</dd>
+          <dt data-i18n="match">試合</dt><dd id="t-match" class="mono">—</dd>
+          <dt data-i18n="world">ワールド</dt><dd id="t-world" class="mono small">—</dd>
+          <dt title="Overworld structure type"><span data-i18n="seed_type">シード種別</span></dt><dd id="t-seedtype" class="mono small">—</dd>
+          <dt data-i18n="bastion">バスチオン</dt><dd id="t-bastion" class="mono small">—</dd>
+          <dt title="Obsidian tower heights"><span data-i18n="end_towers">エンド塔</span></dt><dd id="t-towers" class="mono small">—</dd>
+          <dt title="MCSR seed identifier — not the numeric Minecraft seed"><span data-i18n="seed_id">シードID</span> <span class="dt-note">(MCSR)</span></dt><dd class="mono small copyable" id="t-seedid">—</dd>
+          <dt title="Numeric Minecraft seed (real ranked / .rrf only)"><span data-i18n="seed_ow">シードOW</span> <span class="dt-note">(num)</span></dt><dd class="mono small copyable" id="t-seed-ow">—</dd>
+          <dt data-i18n="seed_net">シードNET</dt><dd class="mono small copyable" id="t-seed-net">—</dd>
+          <dt data-i18n="seed_end">シードEND</dt><dd class="mono small copyable" id="t-seed-end">—</dd>
+          <dt data-i18n="replay">リプレイ</dt><dd id="t-rrf" class="mono small">—</dd>
         </dl>
-        <p class="t-hint">SPACE play · ←/→ 1s · SHIFT+←/→ 5s · , / . frame · ↑/↓ prev/next</p>
+        <p class="t-hint" data-i18n="hint">SPACE 再生 · ←/→ 1秒 · SHIFT+←/→ 5秒 · , / . コマ送り · ↑/↓ 前後</p>
       </div>
     </div>
 
     <aside class="watch-side">
       <div class="side-head">
-        <span class="side-title">CLIPS <span id="side-count" class="side-count"></span></span>
+        <span class="side-title"><span data-i18n="clips">クリップ</span> <span id="side-count" class="side-count"></span></span>
         <select id="side-sort" class="f-select" aria-label="clip order">
-          <option value="new">NEWEST</option>
-          <option value="old">OLDEST</option>
-          <option value="phase">SAME PHASE</option>
-          <option value="cause">SAME CAUSE</option>
-          <option value="igt">IGT ASC</option>
+          <option value="new" data-i18n="sort_new">新しい順</option>
+          <option value="old" data-i18n="sort_old">古い順</option>
+          <option value="phase" data-i18n="same_phase">同フェーズ</option>
+          <option value="cause" data-i18n="same_cause">同死因</option>
+          <option value="igt" data-i18n="sort_igt">IGT 昇順</option>
         </select>
         <button id="player-close" class="player-close" aria-label="close">✕</button>
       </div>

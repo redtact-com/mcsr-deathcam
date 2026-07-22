@@ -22,6 +22,7 @@ Death dashcam for [MCSR Ranked](https://mcsrranked.com/) — automatically clips
 - **Clip-only resolution** (downscale-only): record clips at a lower resolution than your stream to save space. The app sets OBS's *recording* rescale (Advanced output mode), which affects the replay buffer only — your streaming resolution is untouched, and it never upscales past your base canvas. Requirements: OBS in **Advanced output mode**, the recording **Encoder set to a real encoder (not "Use stream encoder")**, and the change applied while outputs are stopped (the app bounces the replay buffer for you; don't apply it mid-stream). The settings dialog shows OBS's actual state (green ✓ once applied).
 - **Storage cap** (容量削減): optionally keep the clips folder under a size limit (GB). When exceeded, the oldest clip **videos** are deleted while their death records — cause, phase, IGT, seed, coordinates and any `.rrf` — are kept, so your statistics survive.
 - SQLite-backed library with a Swing UI.
+- Dashboard UI in **Japanese or English** — toggle in the header (defaults to Japanese; the choice is remembered). Cause and phase names are localized.
 
 ## Metadata sources
 
