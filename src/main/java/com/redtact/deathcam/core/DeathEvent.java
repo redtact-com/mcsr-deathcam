@@ -3,7 +3,8 @@ package com.redtact.deathcam.core;
 import java.time.Instant;
 
 /**
- * A death detected live from latest.log.
+ * A vanilla death message (cause + killer) parsed from a latest.log line. Deaths are detected
+ * from the statistics file; this carries the cause text, harvested from latest.log after the match.
  *
  * @param detectedAt   wall-clock time the log line was observed
  * @param logTime      the HH:mm:ss timestamp printed in the log line

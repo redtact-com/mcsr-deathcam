@@ -1,15 +1,16 @@
 package com.redtact.deathcam.pipeline;
 
 import com.redtact.deathcam.config.AppConfig;
+import com.redtact.deathcam.core.DeathCause;
 import com.redtact.deathcam.core.DeathEvent;
 import com.redtact.deathcam.core.DeathRecord;
 import com.redtact.deathcam.core.DeathStore;
 import com.redtact.deathcam.core.Phase;
 import com.redtact.deathcam.core.WorldSession;
-import com.redtact.deathcam.detect.DeathMessageParser;
-import com.redtact.deathcam.detect.LogTailer;
 import com.redtact.deathcam.detect.PlayerNameResolver;
+import com.redtact.deathcam.detect.StatsDeathDetector;
 import com.redtact.deathcam.detect.WorldTracker;
+import com.redtact.deathcam.meta.DeathLogReader;
 import com.redtact.deathcam.meta.EventsLogParser;
 import com.redtact.deathcam.meta.HungerResetChecker;
 import com.redtact.deathcam.meta.RankedApiClient;
@@ -39,9 +40,13 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Wires the whole death pipeline:
- * WorldTracker -> LogTailer -> DeathMessageParser -> (post-roll wait) ->
- * hunger-reset check -> OBS SaveReplayBuffer -> DB insert ->
- * (world exit) -> .rrf archive + record.json -> DB update.
+ * WorldTracker -> StatsDeathDetector (stats/&lt;uuid&gt;.json deaths counter) ->
+ * (post-roll wait) -> OBS SaveReplayBuffer -> DB insert (cause UNKNOWN) ->
+ * (world exit) -> latest.log cause + level.dat hunger-reset + .rrf/record.json/API ->
+ * DB update -> prune hunger-reset / wrong-type clips.
+ *
+ * <p>Detection reads only the statistics file during a run; latest.log (cause) and level.dat
+ * (hunger reset) are read after the match, keeping the tool within speedrun.com rule A.3.10.
  */
 public final class DeathCamApp {
 
@@ -70,8 +75,7 @@ public final class DeathCamApp {
     private volatile WorldSession session;
     private volatile long sessionStartMillis;
     private volatile String playerName;
-    private volatile LogTailer tailer;
-    private volatile Path tailedLog;
+    private volatile StatsDeathDetector detector;
     private final List<DeathRecord> currentWorldRecords = new ArrayList<>();
 
     public DeathCamApp(AppConfig config) {
@@ -173,6 +177,7 @@ public final class DeathCamApp {
         currentWorldRecords.clear();
         session = next;
         sessionStartMillis = System.currentTimeMillis();
+        stopDetector(); // previous world's detector no longer applies
 
         // Ranked vs private is unknown until the match is queried, so arm recording if the
         // world could belong to any enabled category; a wrong-type clip is pruned post-match.
@@ -184,13 +189,27 @@ public final class DeathCamApp {
             return;
         }
 
-        if (config.playerName == null || config.playerName.isBlank()) {
-            PlayerNameResolver.resolve(next.instanceDir()).ifPresent(n -> playerName = n);
-        }
-        retargetTailer(next);
+        // Player name is NOT resolved here: it needs latest.log/usercache and is only used for
+        // post-match enrichment, so it is resolved in finalizeWorld to keep the run free of
+        // vanilla-file reads. Detection (stats file) needs no name.
+        startDetector(next);
         // Do not force OBS's RecRBTime — the user sizes their own buffer (larger than
         // pre+post for timing headroom); we only read it and warn if it's too short.
         obs.ensureReplayBufferStarted();
+    }
+
+    private void startDetector(WorldSession s) {
+        StatsDeathDetector d = new StatsDeathDetector(s.worldPath(), delta -> onStatsDeaths(s, delta));
+        detector = d;
+        d.start();
+    }
+
+    private void stopDetector() {
+        StatsDeathDetector d = detector;
+        if (d != null) {
+            d.stop();
+            detector = null;
+        }
     }
 
     /** Latency headroom recommended between the app window (pre+post) and OBS's buffer. */
@@ -242,63 +261,47 @@ public final class DeathCamApp {
         }
     }
 
-    private void retargetTailer(WorldSession s) {
-        Path log = s.latestLog();
-        if (log.equals(tailedLog) && tailer != null) {
-            return;
+    /**
+     * The statistics counter jumped by {@code delta} (normally 1). We do not yet know the cause
+     * (that comes from latest.log after the match) or whether it was a hunger reset (level.dat,
+     * also post-match), so every death is captured now and pruned later if the config excludes it.
+     */
+    private void onStatsDeaths(WorldSession s, int delta) {
+        if (!s.equals(session)) {
+            return; // detector for a world we already left
         }
-        if (tailer != null) {
-            tailer.stop();
-        }
-        tailedLog = log;
-        tailer = new LogTailer(log, this::onLogLine);
-        tailer.start();
-    }
-
-    private void onLogLine(String line) {
-        String name = playerName;
-        if (name == null) {
-            return;
-        }
-        DeathMessageParser.parse(line, name).ifPresent(this::onDeath);
-    }
-
-    private void onDeath(DeathEvent event) {
-        WorldSession s = session;
-        if (s == null) {
-            return;
-        }
-        window.setBufferStatus("死亡検知: " + event.rawMessage());
+        long at = System.currentTimeMillis();
+        window.setBufferStatus("死亡検知 (stats): +" + delta);
         // Post-roll: keep recording a bit past the death, then snapshot the buffer.
-        scheduler.schedule(() -> captureDeath(s, event), config.postRollSeconds, TimeUnit.SECONDS);
+        scheduler.schedule(() -> captureDeaths(s, delta, at), config.postRollSeconds, TimeUnit.SECONDS);
     }
 
-    private void captureDeath(WorldSession s, DeathEvent event) {
-        boolean hungerReset = HungerResetChecker.isBedOrAnchorRespawn(s.worldPath());
-        if (hungerReset && config.skipHungerReset) {
-            window.setBufferStatus("ハンガーリセット死亡のためスキップ (" + event.rawMessage() + ")");
-            return;
-        }
-
-        DeathRecord rec = new DeathRecord();
-        rec.worldName = s.worldName();
-        rec.rankedTag = s.rankedTag();
-        rec.detectedAtMillis = event.detectedAt().toEpochMilli();
-        rec.cause = event.cause().name();
-        rec.killer = event.killer();
-        rec.rawMessage = event.rawMessage();
-        rec.hungerReset = hungerReset;
+    private void captureDeaths(WorldSession s, int delta, long detectedAtMillis) {
         Phase phase = EventsLogParser.parse(s.eventsLog()).phaseAt(Long.MAX_VALUE);
-        rec.phase = phase.name();
-
-        store.insert(rec);
-        synchronized (this) {
-            if (s.equals(session)) {
-                currentWorldRecords.add(rec);
+        DeathRecord newest = null;
+        for (int i = 0; i < delta; i++) {
+            DeathRecord rec = new DeathRecord();
+            rec.worldName = s.worldName();
+            rec.rankedTag = s.rankedTag();
+            rec.detectedAtMillis = detectedAtMillis;
+            rec.cause = DeathCause.UNKNOWN.name(); // resolved from latest.log at finalize
+            rec.phase = phase.name();
+            store.insert(rec);
+            synchronized (this) {
+                if (s.equals(session)) {
+                    currentWorldRecords.add(rec);
+                }
             }
+            newest = rec;
         }
         window.refreshRecords();
+        // One buffer snapshot covers the death window; attach it to the most recent death.
+        if (newest != null) {
+            saveClipFor(newest);
+        }
+    }
 
+    private void saveClipFor(DeathRecord rec) {
         obs.saveReplayBuffer().whenComplete((savedPath, err) -> {
             if (err != null) {
                 System.err.println("[app] replay save failed: " + err);
@@ -308,7 +311,7 @@ public final class DeathCamApp {
             try {
                 String base = CLIP_TS.format(LocalDateTime.now())
                         + "_" + (rec.rankedTag != null ? rec.rankedTag : sanitize(rec.worldName))
-                        + "_" + rec.cause.toLowerCase(Locale.ROOT);
+                        + "_" + rec.phase.toLowerCase(Locale.ROOT);
                 String ext = fileExtension(savedPath);
                 Path dest = clipsDir().resolve(base + ext);
                 Files.createDirectories(clipsDir());
@@ -335,6 +338,22 @@ public final class DeathCamApp {
     /** After the world is left: harvest .rrf + record.json and enrich the rows. */
     private void finalizeWorld(WorldSession s, List<DeathRecord> records, long startMillis) {
         try {
+            // Resolve the player name now (post-match) if not configured: it reads latest.log /
+            // usercache and enrichment needs it, so it is deferred out of the run.
+            if (playerName == null || playerName.isBlank()) {
+                PlayerNameResolver.resolve(s.instanceDir()).ifPresent(n -> playerName = n);
+            }
+            // Death cause: read latest.log now that the run is over (A.3.10 forbids reading
+            // vanilla logs before/during a run, not after). Pair the newest log deaths to our
+            // stats-detected deaths in chronological order.
+            enrichCausesFromLog(s, records);
+            // Hunger reset: the level.dat spawn point, also read only after the run.
+            if (HungerResetChecker.isBedOrAnchorRespawn(s.worldPath())) {
+                for (DeathRecord rec : records) {
+                    rec.hungerReset = true;
+                }
+            }
+
             RecordJsonParser.parse(s.recordJson()).ifPresent(info -> {
                 for (DeathRecord rec : records) {
                     rec.finalIgtMillis = info.finalIgt();
@@ -369,12 +388,42 @@ public final class DeathCamApp {
             // for the case where neither .rrf nor the API produced a time.
             fillIgtFromEventsLog(s, records);
 
+            // Persist survivors; drop hunger-reset / wrong-type clips the config excludes.
             for (DeathRecord rec : records) {
-                store.update(rec);
+                if (shouldPrune(rec)) {
+                    prune(rec);
+                } else {
+                    store.update(rec);
+                }
             }
             window.refreshRecords();
         } catch (Throwable t) {
             System.err.println("[app] finalize failed for " + s.worldName() + ": " + t);
+        }
+    }
+
+    /**
+     * Fill cause / killer / raw message from latest.log (post-match). The log holds every death
+     * this session; our K stats-detected deaths for this world are its most recent K death lines,
+     * so the last-K log deaths pair to our records in chronological order.
+     */
+    private void enrichCausesFromLog(WorldSession s, List<DeathRecord> records) {
+        String me = playerName;
+        if (me == null || me.isBlank() || records.isEmpty()) {
+            return;
+        }
+        List<DeathEvent> logDeaths = DeathLogReader.read(s.latestLog(), me);
+        if (logDeaths.isEmpty()) {
+            return;
+        }
+        int k = records.size();
+        int offset = Math.max(0, logDeaths.size() - k);
+        for (int i = 0; i < k && offset + i < logDeaths.size(); i++) {
+            DeathEvent ev = logDeaths.get(offset + i);
+            DeathRecord rec = records.get(i);
+            rec.cause = ev.cause().name();
+            rec.killer = ev.killer();
+            rec.rawMessage = ev.rawMessage();
         }
     }
 
@@ -492,8 +541,11 @@ public final class DeathCamApp {
         }
     }
 
-    /** A recorded death whose now-known match type is switched off in the config. */
+    /** A recorded death the config excludes: an intentional hunger reset, or a now-known match type. */
     private boolean shouldPrune(DeathRecord rec) {
+        if (config.skipHungerReset && rec.hungerReset) {
+            return true;    // intentional hunger-reset death (bed/anchor spawn)
+        }
         if (rec.matchType == null) {
             return false;   // unknown type (practice/non-ranked) — keep
         }
@@ -501,6 +553,13 @@ public final class DeathCamApp {
             return true;
         }
         return rec.matchType == 3 && !config.recordPrivate;
+    }
+
+    private String pruneReason(DeathRecord rec) {
+        if (config.skipHungerReset && rec.hungerReset) {
+            return "hunger reset";
+        }
+        return (rec.matchType != null && rec.matchType == 2 ? "ranked" : "private") + " recording off";
     }
 
     /** Remove a death entirely: clip file, archived replay, and DB row. */
@@ -513,8 +572,7 @@ public final class DeathCamApp {
         synchronized (this) {
             currentWorldRecords.removeIf(r -> r.id == rec.id);
         }
-        System.out.println("[app] pruned " + rec.cause + " clip ("
-                + (rec.matchType == 2 ? "ranked" : "private") + " recording is off)");
+        System.out.println("[app] pruned " + rec.cause + " clip (" + pruneReason(rec) + ")");
     }
 
     private static void deleteFileQuietly(String path) {
