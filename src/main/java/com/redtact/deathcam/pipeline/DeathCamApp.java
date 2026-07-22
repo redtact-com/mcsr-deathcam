@@ -76,6 +76,7 @@ public final class DeathCamApp {
     private volatile long sessionStartMillis;
     private volatile String playerName;
     private volatile StatsDeathDetector detector;
+    private volatile boolean sessionFinalized;
     private final List<DeathRecord> currentWorldRecords = new ArrayList<>();
 
     public DeathCamApp(AppConfig config) {
@@ -115,6 +116,9 @@ public final class DeathCamApp {
         if (api != null) {
             scheduler.scheduleWithFixedDelay(this::enrichPending, 25, 60, TimeUnit.SECONDS);
         }
+        // Finalize a world when the player returns to the title screen (leave_world) instead of
+        // loading another world — otherwise the last death of a session never gets its cause.
+        scheduler.scheduleWithFixedDelay(this::checkLeaveWorld, 5, 5, TimeUnit.SECONDS);
         window.setWorldStatus("ワールド待機中 (latest_world.json 監視)");
         window.refreshRecords();
         window.setVisible(true);
@@ -170,13 +174,15 @@ public final class DeathCamApp {
         WorldSession prev = session;
         List<DeathRecord> prevRecords = List.copyOf(currentWorldRecords);
         long prevStart = sessionStartMillis;
-        if (prev != null && !prevRecords.isEmpty()) {
+        // Skip if checkLeaveWorld already finalized this world at the title screen.
+        if (prev != null && !prevRecords.isEmpty() && !sessionFinalized) {
             scheduler.schedule(() -> finalizeWorld(prev, prevRecords, prevStart),
                     FINALIZE_DELAY_SECONDS, TimeUnit.SECONDS);
         }
         currentWorldRecords.clear();
         session = next;
         sessionStartMillis = System.currentTimeMillis();
+        sessionFinalized = false;
         stopDetector(); // previous world's detector no longer applies
 
         // Ranked vs private is unknown until the match is queried, so arm recording if the
@@ -210,6 +216,39 @@ public final class DeathCamApp {
             d.stop();
             detector = null;
         }
+    }
+
+    /**
+     * The world-change finalize only fires when a NEW world loads. If the player instead quits to
+     * the title screen (SpeedRunIGT logs {@code common.leave_world}) the run is over but no world
+     * change arrives, so the last death of a session would never get enriched. Detect leave_world
+     * from events.log (a mod output, always readable) and finalize once — after which the post-match
+     * latest.log/level.dat reads are safe because the run has ended.
+     */
+    private void checkLeaveWorld() {
+        WorldSession s = session;
+        if (s == null || sessionFinalized) {
+            return;
+        }
+        if (EventsLogParser.parse(s.eventsLog()).leaveWorldIgt().isEmpty()) {
+            return; // still in the run
+        }
+        List<DeathRecord> recs;
+        long start;
+        synchronized (this) {
+            if (sessionFinalized || !s.equals(session)) {
+                return;
+            }
+            recs = List.copyOf(currentWorldRecords);
+            if (recs.isEmpty()) {
+                return;
+            }
+            start = sessionStartMillis;
+            sessionFinalized = true;
+        }
+        stopDetector();
+        // Same delay as the world-change path so .rrf / record.json have settled after the save.
+        scheduler.schedule(() -> finalizeWorld(s, recs, start), FINALIZE_DELAY_SECONDS, TimeUnit.SECONDS);
     }
 
     /**
