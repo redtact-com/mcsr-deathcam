@@ -96,6 +96,8 @@ public final class RankedApiClient {
         HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + path))
                 .timeout(timeout)
                 .header("Accept", "application/json")
+                // Identify ourselves politely (courtesy for the public API).
+                .header("User-Agent", "mcsr-deathcam (+https://github.com/redtact-com/mcsr-deathcam)")
                 .GET()
                 .build();
         HttpResponse<String> resp =

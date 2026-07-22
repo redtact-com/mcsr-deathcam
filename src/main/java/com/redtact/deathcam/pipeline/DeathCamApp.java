@@ -354,10 +354,7 @@ public final class DeathCamApp {
                         rec.seedNether = rrf.netherSeed();
                         rec.seedEnd = rrf.theEndSeed();
                         rec.rrfPath = archived.toString();
-                        rrf.opponentOf(me).ifPresent(op -> {
-                            rec.opponentName = op.nickname();
-                            rec.opponentElo = op.eloRate();
-                        });
+                        // Opponent name / Elo are intentionally NOT stored (self-focused tool).
                     }
                     if (myUuid != null) {
                         pairDeathTimes(records, rrf.deathsOf(myUuid), startMillis);
@@ -365,7 +362,7 @@ public final class DeathCamApp {
                 });
             }
 
-            // Ranked API: seed type / bastion / end towers / opponent / elo / result + death IGT.
+            // Ranked API: seed type / bastion / end towers / result + death IGT (no opponent/elo).
             enrichFromApi(records);
 
             // Offline fallback: approximate the final death IGT from events.log (leave_world),
@@ -383,7 +380,7 @@ public final class DeathCamApp {
 
     /**
      * Enrich a group of same-match deaths from the Ranked API. Correlates the deaths to a match
-     * by wall-clock time window, then fills seed/opponent/elo/result and pairs the per-death IGT
+     * by wall-clock time window, then fills seed/result and pairs the per-death IGT
      * from the match timeline. No-op when the API is disabled, the player is unknown, or the match
      * is not yet indexed (the periodic sweep retries later).
      */
@@ -425,22 +422,8 @@ public final class DeathCamApp {
                 }
             }
             rec.resultKind = resultKind(detail, myUuid);
-            detail.opponent(me).ifPresent(op -> {
-                if (rec.opponentName == null) {
-                    rec.opponentName = op.nickname();
-                }
-                if (rec.opponentElo == null) {
-                    rec.opponentElo = op.eloRate();
-                }
-            });
-            if (myUuid != null) {
-                detail.changeForUuid(myUuid).ifPresent(ch -> {
-                    rec.eloChange = ch.change();
-                    if (ch.eloRate() != null) {
-                        rec.eloBefore = ch.eloRate() - ch.change();
-                    }
-                });
-            }
+            // Opponent name and Elo (other players' data) are intentionally NOT stored — this tool
+            // only keeps the player's own death (cause / clip / IGT / seed / phase / result).
         }
         if (myUuid != null) {
             pairApiDeaths(records, detail.deathsOf(myUuid), detail.startMillis());

@@ -46,8 +46,6 @@ class SqliteDeathStoreTest {
         r.deathX = -1512;
         r.deathY = 20;
         r.deathZ = 85;
-        r.opponentName = "opponent";
-        r.opponentElo = 1227;
         r.hungerReset = true;
         r.clipPath = "/clips/death1.mkv";
         r.rrfPath = "/library/11493506.rrf";
@@ -73,8 +71,6 @@ class SqliteDeathStoreTest {
         assertEquals(expected.deathX, actual.deathX);
         assertEquals(expected.deathY, actual.deathY);
         assertEquals(expected.deathZ, actual.deathZ);
-        assertEquals(expected.opponentName, actual.opponentName);
-        assertEquals(expected.opponentElo, actual.opponentElo);
         assertEquals(expected.hungerReset, actual.hungerReset);
         assertEquals(expected.clipPath, actual.clipPath);
         assertEquals(expected.rrfPath, actual.rrfPath);

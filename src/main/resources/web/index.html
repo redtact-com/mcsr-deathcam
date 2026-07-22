@@ -39,7 +39,6 @@
   <div class="f-group" id="phase-chips" aria-label="phase filter"></div>
   <div class="f-group">
     <select id="cause-select" class="f-select" aria-label="cause filter"><option value="" data-i18n="all_causes">全死因</option></select>
-    <input id="opponent-input" class="f-input" type="search" data-i18n-ph="opponent_ph" placeholder="対戦相手…" aria-label="opponent filter">
     <select id="sort-select" class="f-select" aria-label="sort">
       <option value="new" data-i18n="sort_new">新しい順</option>
       <option value="old" data-i18n="sort_old">古い順</option>
@@ -80,7 +79,7 @@
 
   <div id="stats-table-wrap" class="table-wrap" hidden>
     <table id="stats-table">
-      <thead><tr><th data-i18n="th_date">日時</th><th data-i18n="th_phase">フェーズ</th><th data-i18n="th_cause">死因</th><th data-i18n="th_killer">相手</th><th>IGT</th><th data-i18n="th_pos">座標</th><th data-i18n="th_opponent">対戦相手</th><th data-i18n="th_world">ワールド</th></tr></thead>
+      <thead><tr><th data-i18n="th_date">日時</th><th data-i18n="th_phase">フェーズ</th><th data-i18n="th_cause">死因</th><th data-i18n="th_killer">相手</th><th>IGT</th><th data-i18n="th_pos">座標</th><th data-i18n="th_world">ワールド</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -119,8 +118,6 @@
         <div class="wi-badges">
           <span id="t-date" class="wi-badge">—</span>
           <span id="t-result" class="wi-badge">—</span>
-          <span id="t-elo" class="wi-badge">—</span>
-          <span id="t-vs" class="wi-badge">—</span>
         </div>
         <blockquote id="t-raw" class="t-raw">—</blockquote>
         <dl class="t-grid">

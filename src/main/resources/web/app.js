@@ -100,7 +100,6 @@ const state = {
   range: 'all',          // '7' | '30' | '90' | 'all'
   phases: new Set(PHASES.map(p => p.id)),
   cause: '',
-  opponent: '',
   sort: 'new',
   table: false,
   sideSort: 'new',
@@ -165,8 +164,7 @@ function filtered() {
   let list = records.filter(r =>
     r.detectedAtMillis >= minTs &&
     state.phases.has(r.phase || 'UNKNOWN') &&
-    (!state.cause || r.cause === state.cause) &&
-    (!state.opponent || (r.opponentName || '').toLowerCase().includes(state.opponent.toLowerCase()))
+    (!state.cause || r.cause === state.cause)
   );
   const by = {
     new: (a, b) => b.detectedAtMillis - a.detectedAtMillis,
@@ -204,12 +202,11 @@ function buildFilterBar() {
     syncFilterUi(); renderAll();
   });
   $('#cause-select').addEventListener('change', e => { state.cause = e.target.value; renderAll(); });
-  $('#opponent-input').addEventListener('input', e => { state.opponent = e.target.value.trim(); renderAll(); });
   $('#sort-select').addEventListener('change', e => { state.sort = e.target.value; renderAll(); });
   $('#clear-filters').addEventListener('click', () => {
-    Object.assign(state, { range: 'all', cause: '', opponent: '', sort: 'new' });
+    Object.assign(state, { range: 'all', cause: '', sort: 'new' });
     state.phases = new Set(PHASES.map(p => p.id));
-    $('#cause-select').value = ''; $('#opponent-input').value = ''; $('#sort-select').value = 'new';
+    $('#cause-select').value = ''; $('#sort-select').value = 'new';
     syncFilterUi(); renderAll();
   });
   for (const id of ['trend-gran', 'igt-bin', 'cause-topn', 'phase-style', 'map-dim']) {
@@ -285,8 +282,7 @@ function renderLibrary() {
     const sub = el('div', 'dc-sub');
     sub.appendChild(el('span', null, fmtDate(r.detectedAtMillis)));
     if (r.seedType) sub.appendChild(el('span', null, r.seedType + (r.bastionType ? ' / ' + r.bastionType : '')));
-    if (r.opponentName) sub.appendChild(el('span', null, t('vs') + ' ' + r.opponentName));
-    else if (r.rankedTag) sub.appendChild(el('span', null, '#' + r.rankedTag));
+    if (r.rankedTag) sub.appendChild(el('span', null, '#' + r.rankedTag));
     if (r.deathX != null) sub.appendChild(el('span', null, `${r.deathX} ${r.deathY} ${r.deathZ}`));
     card.appendChild(sub);
 
@@ -294,12 +290,7 @@ function renderLibrary() {
     foot.appendChild(r.clipPath
       ? el('span', 'dc-watch', '▶ ' + t('watch'))
       : el('span', 'dc-noclip', t('no_clip')));
-    if (r.eloChange != null) {
-      const sign = r.eloChange > 0 ? '+' : '';
-      const e = el('span', 'dc-elo', `${sign}${r.eloChange} elo`);
-      e.style.color = r.eloChange > 0 ? 'var(--ph-overworld)' : r.eloChange < 0 ? 'var(--ph-nether)' : '';
-      foot.appendChild(e);
-    } else if (r.resultKind) {
+    if (r.resultKind) {
       foot.appendChild(el('span', null, resultLabel(r.resultKind)));
     }
     if (r.hungerReset) foot.appendChild(el('span', null, t('hunger_reset')));
@@ -344,18 +335,6 @@ function openPlayer(record) {
   $('#t-date').textContent = new Date(r.detectedAtMillis).toLocaleString();
   const mt = r.matchType === 2 ? t('ranked') : r.matchType === 3 ? t('private') : '';
   $('#t-result').textContent = r.resultKind ? resultLabel(r.resultKind) + (mt ? ` · ${mt}` : '') : (mt || '');
-  const elo = $('#t-elo');
-  if (r.eloChange != null) {
-    const sign = r.eloChange > 0 ? '+' : '';
-    const after = r.eloBefore != null ? `${r.eloBefore} → ${r.eloBefore + r.eloChange} ` : '';
-    elo.innerHTML = `ELO ${after}(${sign}${r.eloChange})`;
-    elo.style.color = r.eloChange > 0 ? '#5da84e' : r.eloChange < 0 ? '#c23f37' : '';
-  } else {
-    elo.textContent = '';
-    elo.style.color = '';
-  }
-  $('#t-vs').textContent = r.opponentName
-    ? t('vs') + ' ' + r.opponentName + (r.opponentElo != null ? ` (${r.opponentElo})` : '') : '';
 
   // detail grid
   $('#t-igt').textContent = fmtIgt(r.igtAtDeathMillis)
@@ -421,8 +400,7 @@ function renderSidebar() {
     body.appendChild(el('div', 'si-cause', causeLabel(r.cause) + (r.killer ? ' ← ' + r.killer : '')));
     const bits = [fmtDate(r.detectedAtMillis)];
     if (r.seedType) bits.push(r.seedType);
-    if (r.opponentName) bits.push(t('vs') + ' ' + r.opponentName);
-    if (r.eloChange != null) bits.push((r.eloChange > 0 ? '+' : '') + r.eloChange + ' elo');
+    if (r.resultKind) bits.push(resultLabel(r.resultKind));
     body.appendChild(el('div', 'si-sub', bits.join(' · ')));
     item.appendChild(body);
 
@@ -820,7 +798,6 @@ function renderTable(list) {
       r.killer || '—',
       fmtIgt(r.igtAtDeathMillis),
       r.deathX != null ? `${r.deathX} ${r.deathY} ${r.deathZ}` : '—',
-      r.opponentName || '—',
       r.worldName || '—',
     ];
     cells.forEach(c => tr.appendChild(el('td', null, c)));

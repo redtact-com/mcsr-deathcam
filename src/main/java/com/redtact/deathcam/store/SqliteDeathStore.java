@@ -118,8 +118,26 @@ public final class SqliteDeathStore implements DeathStore {
                 st.execute(CREATE_TABLE);
             }
             migrate();
+            purgeOtherPlayerData();
         } catch (IOException | SQLException e) {
             throw new IllegalStateException("failed to open death store at " + dbFile, e);
+        }
+    }
+
+    /**
+     * This tool no longer keeps other players' data. Clear any opponent name / Elo that older
+     * versions stored. Idempotent (touches no rows once clean).
+     */
+    private void purgeOtherPlayerData() throws SQLException {
+        try (Statement st = conn.createStatement()) {
+            int cleared = st.executeUpdate(
+                    "UPDATE deaths SET opponent_name = NULL, opponent_elo = NULL, "
+                            + "elo_before = NULL, elo_change = NULL "
+                            + "WHERE opponent_name IS NOT NULL OR opponent_elo IS NOT NULL "
+                            + "OR elo_before IS NOT NULL OR elo_change IS NOT NULL");
+            if (cleared > 0) {
+                System.out.println("[store] cleared opponent/elo from " + cleared + " old record(s)");
+            }
         }
     }
 

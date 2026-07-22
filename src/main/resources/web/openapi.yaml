@@ -118,8 +118,6 @@ components:
         deathX: { type: integer, nullable: true }
         deathY: { type: integer, nullable: true }
         deathZ: { type: integer, nullable: true }
-        opponentName: { type: string, nullable: true }
-        opponentElo: { type: integer, nullable: true }
         hungerReset: { type: boolean, description: Respawn point was a bed/anchor }
         clipPath: { type: string, nullable: true, description: Absolute path of the saved clip video }
         rrfPath: { type: string, nullable: true, description: Absolute path of the archived ranked replay }
@@ -131,5 +129,3 @@ components:
         endTowers: { type: string, nullable: true, description: Comma-joined obsidian tower heights, e.g. "76,94,82,100" }
         seedVariations: { type: string, nullable: true }
         resultKind: { type: string, nullable: true, enum: [WIN, LOSS, DRAW, FORFEIT, COMPLETED] }
-        eloBefore: { type: integer, nullable: true }
-        eloChange: { type: integer, nullable: true }
