@@ -43,6 +43,19 @@ Notes:
 - **Replay buffer length**: set OBS's *Maximum Replay Time* comfortably longer than your pre-roll + post-roll (about +5 s). A saved clip is always the last N seconds up to the moment of saving, so detection/save latency shifts that window forward; if the OBS buffer only just equals pre+post, the lead-in gets clipped. The app reads your OBS buffer length and warns in Settings if it's too short (it never shrinks it — you size it). Auto-starting the replay buffer on connect is a toggle in Settings.
 - MCSR Ranked 1.16.1 setup with SpeedrunIGT (the standard ranked install)
 
+## REST API (OpenAPI / Swagger)
+
+The embedded dashboard server exposes a small REST API, described by an OpenAPI 3 document:
+
+- `GET /api/docs` — **Swagger UI**, bundled in the jar (no CDN); browse and try the API
+- `GET /api/openapi.yaml` — the OpenAPI 3 spec
+- `GET /api/records` — all death records (the `DeathRecord` schema)
+- `GET /media/clip/{id}` — stream a clip (supports HTTP Range)
+
+The external MCSR Ranked API this app consumes is pinned to its official spec at
+[`openapi/mcsrranked.yaml`](openapi/mcsrranked.yaml) (from `MCSR-Ranked/api-docs`); a contract test
+checks the fields `RankedApiClient` reads are still present in it.
+
 ## Building
 
 ```

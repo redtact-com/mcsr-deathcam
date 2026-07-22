@@ -94,6 +94,10 @@ public final class DashboardServer {
             String path = exchange.getRequestURI().getPath();
             if (path.equals("/api/records")) {
                 handleRecords(exchange);
+            } else if (path.equals("/api/openapi.yaml")) {
+                handleStatic(exchange, "/openapi.yaml");     // OpenAPI 3 spec, bundled
+            } else if (path.equals("/api/docs") || path.equals("/api/docs/")) {
+                handleStatic(exchange, "/swagger/index.html"); // self-contained Swagger UI
             } else if (path.startsWith("/media/clip/")) {
                 handleClip(exchange, path.substring("/media/clip/".length()));
             } else {
@@ -388,6 +392,9 @@ public final class DashboardServer {
         }
         if (p.endsWith(".woff2")) {
             return "font/woff2";
+        }
+        if (p.endsWith(".yaml") || p.endsWith(".yml")) {
+            return "application/yaml; charset=utf-8";
         }
         return "application/octet-stream";
     }

@@ -135,6 +135,9 @@ body {
   background: var(--surface);
   white-space: nowrap;
 }
+.top-meta { display: flex; align-items: center; gap: 8px; }
+a.api-link { text-decoration: none; transition: color 0.15s, border-color 0.15s; }
+a.api-link:hover { color: var(--ink); border-color: var(--hairline-2); }
 
 /* ---------- tabs ---------- */
 

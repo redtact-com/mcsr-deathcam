@@ -1,0 +1,135 @@
+openapi: 3.0.3
+info:
+  title: mcsr-deathcam dashboard API
+  version: 0.1.0
+  description: |
+    Local REST API served by the mcsr-deathcam app's embedded dashboard server.
+    Bound to 127.0.0.1 only. The web dashboard (this same server) is the primary consumer.
+  license:
+    name: Apache-2.0
+servers:
+  - url: /
+    description: The embedded server (http://127.0.0.1:<port>/)
+tags:
+  - name: records
+  - name: media
+  - name: docs
+paths:
+  /api/records:
+    get:
+      tags: [records]
+      operationId: listRecords
+      summary: All death records, newest first
+      description: |
+        Returns every recorded death as a JSON array. Null fields are omitted.
+        Filtering, sorting and statistics are done client-side in the dashboard.
+      responses:
+        '200':
+          description: Death records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeathRecord'
+        '405':
+          description: Method not allowed (only GET)
+  /media/clip/{id}:
+    get:
+      tags: [media]
+      operationId: getClip
+      summary: Stream a death clip video
+      description: |
+        Streams the clip video for a death record. Supports HTTP Range requests
+        (206 Partial Content) for seeking; a bare request returns 200 with the whole file.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+          example: bytes=0-1048575
+      responses:
+        '200':
+          description: Whole clip
+          content:
+            video/mp4: { schema: { type: string, format: binary } }
+        '206':
+          description: Partial clip (Range)
+          content:
+            video/mp4: { schema: { type: string, format: binary } }
+        '404':
+          description: No such record, or it has no saved clip
+        '416':
+          description: Range not satisfiable
+  /api/openapi.yaml:
+    get:
+      tags: [docs]
+      operationId: getOpenapi
+      summary: This OpenAPI document
+      responses:
+        '200':
+          description: OpenAPI 3 spec (YAML)
+          content:
+            application/yaml: { schema: { type: string } }
+  /api/docs:
+    get:
+      tags: [docs]
+      operationId: getSwaggerUi
+      summary: Swagger UI (self-contained, bundled in the jar)
+      responses:
+        '200':
+          description: Swagger UI HTML page
+          content:
+            text/html: { schema: { type: string } }
+components:
+  schemas:
+    DeathRecord:
+      type: object
+      description: One recorded death. Fields only known after the match are nullable/omitted.
+      required: [id, worldName, detectedAtMillis, cause, hungerReset]
+      properties:
+        id: { type: integer, format: int64 }
+        worldName: { type: string, example: "mcsrranked #IFiORar8J" }
+        rankedTag: { type: string, nullable: true, example: "IFiORar8J" }
+        matchId: { type: integer, format: int64, nullable: true }
+        detectedAtMillis: { type: integer, format: int64, description: Wall-clock ms of detection }
+        cause:
+          type: string
+          description: Categorised death cause
+          enum: [SLAIN, SHOT, FIREBALLED, BLOWN_UP, INTENTIONAL_GAME_DESIGN, FALL, LAVA, FIRE, MAGMA, DROWN, SUFFOCATE, STARVE, WITHER, MAGIC, LIGHTNING, CACTUS, BERRY_BUSH, ANVIL, FALLING_BLOCK, VOID, KINETIC, STING, TRIDENT, DRAGON_BREATH, THORNS, GENERIC, UNKNOWN]
+        killer: { type: string, nullable: true, example: "Blaze" }
+        rawMessage: { type: string, example: "Taku128n64 was slain by Blaze" }
+        phase:
+          type: string
+          enum: [OVERWORLD, NETHER, BASTION, FORTRESS, BLIND, STRONGHOLD, END, UNKNOWN]
+        igtAtDeathMillis: { type: integer, format: int64, nullable: true }
+        finalIgtMillis: { type: integer, format: int64, nullable: true }
+        finalRtaMillis: { type: integer, format: int64, nullable: true }
+        seedOverworld: { type: string, nullable: true, description: Numeric MC seed (real ranked / .rrf only) }
+        seedNether: { type: string, nullable: true }
+        seedEnd: { type: string, nullable: true }
+        deathX: { type: integer, nullable: true }
+        deathY: { type: integer, nullable: true }
+        deathZ: { type: integer, nullable: true }
+        opponentName: { type: string, nullable: true }
+        opponentElo: { type: integer, nullable: true }
+        hungerReset: { type: boolean, description: Respawn point was a bed/anchor }
+        clipPath: { type: string, nullable: true, description: Absolute path of the saved clip video }
+        rrfPath: { type: string, nullable: true, description: Absolute path of the archived ranked replay }
+        notes: { type: string, nullable: true }
+        matchType: { type: integer, nullable: true, description: "2 = ranked, 3 = private" }
+        seedId: { type: string, nullable: true, description: MCSR seed identifier (not the numeric seed) }
+        seedType: { type: string, nullable: true, example: SHIPWRECK }
+        bastionType: { type: string, nullable: true, example: STABLES }
+        endTowers: { type: string, nullable: true, description: Comma-joined obsidian tower heights, e.g. "76,94,82,100" }
+        seedVariations: { type: string, nullable: true }
+        resultKind: { type: string, nullable: true, enum: [WIN, LOSS, DRAW, FORFEIT, COMPLETED] }
+        eloBefore: { type: integer, nullable: true }
+        eloChange: { type: integer, nullable: true }
