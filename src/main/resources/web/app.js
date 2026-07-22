@@ -209,7 +209,7 @@ function buildFilterBar() {
     $('#cause-select').value = ''; $('#sort-select').value = 'new';
     syncFilterUi(); renderAll();
   });
-  for (const id of ['trend-gran', 'igt-bin', 'cause-topn', 'phase-style', 'map-dim']) {
+  for (const id of ['trend-gran', 'igt-bin', 'cause-topn', 'phase-style']) {
     $('#' + id).addEventListener('change', renderStats);
   }
   $('#table-toggle').addEventListener('click', () => {
@@ -283,7 +283,6 @@ function renderLibrary() {
     sub.appendChild(el('span', null, fmtDate(r.detectedAtMillis)));
     if (r.seedType) sub.appendChild(el('span', null, r.seedType + (r.bastionType ? ' / ' + r.bastionType : '')));
     if (r.rankedTag) sub.appendChild(el('span', null, '#' + r.rankedTag));
-    if (r.deathX != null) sub.appendChild(el('span', null, `${r.deathX} ${r.deathY} ${r.deathZ}`));
     card.appendChild(sub);
 
     const foot = el('div', 'dc-foot');
@@ -294,7 +293,6 @@ function renderLibrary() {
       foot.appendChild(el('span', null, resultLabel(r.resultKind)));
     }
     if (r.hungerReset) foot.appendChild(el('span', null, t('hunger_reset')));
-    if (r.rrfPath) foot.appendChild(el('span', 'dc-rrf', '.rrf ●'));
     card.appendChild(foot);
 
     card.addEventListener('click', () => openPlayer(r));
@@ -339,17 +337,9 @@ function openPlayer(record) {
   // detail grid
   $('#t-igt').textContent = fmtIgt(r.igtAtDeathMillis)
     + (r.finalRtaMillis ? `  (${t('match_prefix')} ${fmtIgt(r.finalRtaMillis)})` : '');
-  $('#t-pos').textContent = r.deathX != null ? `${r.deathX} / ${r.deathY} / ${r.deathZ}` : '—';
-  $('#t-match').textContent = r.matchId ? '#' + r.matchId : '—';
-  $('#t-world').textContent = r.worldName || '—';
   $('#t-seedtype').textContent = r.seedType || '—';
   $('#t-bastion').textContent = r.bastionType || '—';
   $('#t-towers').textContent = r.endTowers || '—';
-  setCopyable('#t-seedid', r.seedId);
-  setCopyable('#t-seed-ow', r.seedOverworld);
-  setCopyable('#t-seed-net', r.seedNether);
-  setCopyable('#t-seed-end', r.seedEnd);
-  $('#t-rrf').textContent = r.rrfPath || '—';
 
   renderSidebar();
   $('#player').hidden = false;
@@ -407,17 +397,6 @@ function renderSidebar() {
     item.addEventListener('click', () => openPlayer(r));
     box.appendChild(item);
   }
-}
-
-function setCopyable(sel, value) {
-  const d = $(sel);
-  d.textContent = value || '—';
-  d.onclick = value ? () => {
-    navigator.clipboard.writeText(value).then(() => {
-      d.classList.add('copied');
-      setTimeout(() => d.classList.remove('copied'), 1200);
-    });
-  } : null;
 }
 
 function closePlayer() {
@@ -546,7 +525,6 @@ function renderStats() {
   renderCauseChart(list);
   renderTrendChart(list);
   renderIgtChart(list);
-  renderMapChart(list);
   renderPhaseLegend();
 }
 
@@ -731,47 +709,6 @@ function renderIgtChart(list) {
   });
 }
 
-const MAP_GROUPS = {
-  nether: ['NETHER', 'BASTION', 'FORTRESS'],
-  surface: ['OVERWORLD', 'BLIND', 'STRONGHOLD'],
-  end: ['END'],
-};
-
-function renderMapChart(list) {
-  destroyChart('c-map');
-  const dim = $('#map-dim').value;
-  $('#map-note').textContent = `${t('map_' + dim) || dim} ${t('map_note')}`;
-  const phases = MAP_GROUPS[dim];
-  const pts = list.filter(r => r.deathX != null && phases.includes(r.phase));
-  if (!pts.length) { plotEmpty('c-map', t('no_coords')); return; }
-  const datasets = phases.map(id => {
-    const p = PHASE_BY_ID[id];
-    return {
-      label: phaseLabel(p.id),
-      data: pts.filter(r => r.phase === id).map(r => ({ x: r.deathX, y: -r.deathZ, r })),
-      backgroundColor: p.color + 'd9',
-      borderColor: '#ffffff', borderWidth: 1,
-      pointRadius: 5, pointHoverRadius: 7,
-    };
-  }).filter(d => d.data.length);
-  const opts = baseOpts();
-  opts.plugins.legend = datasets.length > 1
-    ? { display: true, labels: { color: INK2, font: { family: MONO, size: 10 }, boxWidth: 9, boxHeight: 9 } }
-    : { display: false };
-  opts.plugins.tooltip.callbacks = {
-    title: () => '',
-    label: ctx => {
-      const r = ctx.raw.r;
-      return ` ${causeLabel(r.cause)}${r.killer ? ' ← ' + r.killer : ''}  (${r.deathX}, ${r.deathY}, ${r.deathZ})`;
-    },
-  };
-  opts.scales = {
-    x: axis({ title: { display: true, text: 'X', color: INK3, font: { family: MONO, size: 9 } } }),
-    y: axis({ title: { display: true, text: '−Z (north ↑)', color: INK3, font: { family: MONO, size: 9 } } }),
-  };
-  charts['c-map'] = new Chart($('#c-map'), { type: 'scatter', data: { datasets }, options: opts });
-}
-
 function renderPhaseLegend() {
   const lg = $('#phase-legend');
   lg.replaceChildren();
@@ -797,8 +734,6 @@ function renderTable(list) {
       causeLabel(r.cause),
       r.killer || '—',
       fmtIgt(r.igtAtDeathMillis),
-      r.deathX != null ? `${r.deathX} ${r.deathY} ${r.deathZ}` : '—',
-      r.worldName || '—',
     ];
     cells.forEach(c => tr.appendChild(el('td', null, c)));
     tbody.appendChild(tr);
