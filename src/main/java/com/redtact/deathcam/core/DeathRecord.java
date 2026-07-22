@@ -26,7 +26,7 @@ public class DeathRecord {
     public Integer deathZ;
     public String opponentName;     // nullable
     public Integer opponentElo;     // nullable
-    public boolean hungerReset;     // respawn point was bed/anchor at death time
+    public boolean hungerReset;     // respawn point was a bed/anchor (level.dat, checked post-match)
     public String clipPath;         // nullable when clip skipped (hunger reset) or OBS failed
     public String rrfPath;          // archived replay, nullable
     public String notes;            // free-form, nullable
