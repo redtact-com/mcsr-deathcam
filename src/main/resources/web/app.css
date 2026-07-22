@@ -466,6 +466,14 @@ a.api-link:hover, button.api-link:hover {
 
 .watch-info { padding: 20px 2px 0; }
 .wi-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.t-delete {
+  margin-left: auto; align-self: center; white-space: nowrap;
+  padding: 6px 13px; border-radius: 8px; border: 1px solid #e4b3a6;
+  background: transparent; color: var(--accent-ink);
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.t-delete:hover { background: var(--accent-tint); border-color: var(--accent); }
+.t-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .wi-cause { font-size: 26px; font-weight: 800; letter-spacing: 0.01em; margin: 0; color: var(--ink); }
 .t-killer { color: var(--ink-soft); font-size: 15px; font-weight: 700; }
 .wi-badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 16px; }
