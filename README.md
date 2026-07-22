@@ -43,7 +43,7 @@ Notes:
 
 - Java 17+
 - OBS 28+ with the WebSocket server enabled (Tools → WebSocket Server Settings) and the **Replay Buffer enabled** (Settings → Output). For in-browser playback set the recording format to **Fragmented MP4** (Settings → Output → Recording) — the dashboard warns on `.mkv` clips, which some browsers can't play.
-- **Replay buffer length**: set OBS's *Maximum Replay Time* comfortably longer than your pre-roll + post-roll (about +5 s). A saved clip is always the last N seconds up to the moment of saving, so detection/save latency shifts that window forward; if the OBS buffer only just equals pre+post, the lead-in gets clipped. The app reads your OBS buffer length and warns in Settings if it's too short (it never shrinks it — you size it). Auto-starting the replay buffer on connect is a toggle in Settings.
+- **Replay buffer length**: set OBS's *Maximum Replay Time* comfortably longer than your pre-roll + post-roll (about **+10 s**). A saved clip is always the last N seconds up to the moment of saving, so detection/save latency shifts that window forward; the stats-file death detection lags the actual death by ~3–4 s (the game flushes `minecraft:deaths` only when the death screen saves — measured on a real 1.16.1 match), so give the buffer that much extra headroom or the lead-in gets clipped. The app reads your OBS buffer length and warns in Settings if it's too short (it never shrinks it — you size it). Auto-starting the replay buffer on connect is a toggle in Settings.
 - MCSR Ranked 1.16.1 setup with SpeedrunIGT (the standard ranked install)
 
 ## REST API (OpenAPI / Swagger)

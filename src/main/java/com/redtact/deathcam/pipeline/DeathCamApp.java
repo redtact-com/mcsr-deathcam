@@ -212,8 +212,16 @@ public final class DeathCamApp {
         }
     }
 
-    /** Latency headroom recommended between the app window (pre+post) and OBS's buffer. */
-    private static final int BUFFER_MARGIN_SECONDS = 5;
+    /**
+     * Death -> detection latency: an in-game death only flushes {@code minecraft:deaths} to the
+     * stats file when the death screen saves, which measured ~3-4 s on a real 1.16.1 ranked match
+     * (E2E 2026-07-22: latest.log death line 13:51:37 -> stats flush 13:51:40.4 -> fire +60 ms).
+     * The clip is unaffected (the buffer holds the past), but OBS's buffer must lead the app window
+     * (pre+post) by at least this much plus a little OBS headroom or the pre-roll gets clipped.
+     */
+    private static final int DETECTION_LATENCY_SECONDS = 4;
+    private static final int OBS_HEADROOM_SECONDS = 5;
+    private static final int BUFFER_MARGIN_SECONDS = DETECTION_LATENCY_SECONDS + OBS_HEADROOM_SECONDS;
 
     /**
      * The saved clip is always [saveTime - RecRBTime, saveTime]; detection+save latency shifts
