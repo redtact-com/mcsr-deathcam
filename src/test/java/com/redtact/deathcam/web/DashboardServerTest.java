@@ -140,6 +140,44 @@ class DashboardServerTest {
     }
 
     // ------------------------------------------------------------------
+    // DELETE /api/records/{id}
+    // ------------------------------------------------------------------
+
+    private HttpResponse<byte[]> delete(String pathAndQuery) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(server.url() + pathAndQuery))
+                .DELETE().build();
+        return client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    @Test
+    void deleteRecordRemovesRowAndClipFile() throws Exception {
+        assertTrue(Files.exists(Path.of(clipPath)));
+        HttpResponse<byte[]> resp = delete("api/records/" + clipId);
+        assertEquals(204, resp.statusCode());
+        assertFalse(Files.exists(Path.of(clipPath)), "clip file should be deleted");
+
+        // Row gone: /api/records now returns only the no-clip record.
+        DeathRecord[] left = new Gson().fromJson(
+                new String(get("api/records").body(), StandardCharsets.UTF_8), DeathRecord[].class);
+        assertEquals(1, left.length);
+        assertEquals(noClipId, left[0].id);
+
+        // The clip stream is now 404.
+        assertEquals(404, get("media/clip/" + clipId).statusCode());
+    }
+
+    @Test
+    void deleteNonexistentRecordIs404() throws Exception {
+        assertEquals(404, delete("api/records/999999").statusCode());
+    }
+
+    @Test
+    void getOnRecordIdPathIs405() throws Exception {
+        // /api/records/{id} supports DELETE only.
+        assertEquals(405, get("api/records/" + noClipId).statusCode());
+    }
+
+    // ------------------------------------------------------------------
     // /media/clip/{id}
     // ------------------------------------------------------------------
 

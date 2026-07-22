@@ -34,6 +34,28 @@ paths:
                   $ref: '#/components/schemas/DeathRecord'
         '405':
           description: Method not allowed (only GET)
+  /api/records/{id}:
+    delete:
+      tags: [records]
+      operationId: deleteRecord
+      summary: Delete one death record and its clip / replay files
+      description: |
+        Removes the death record row and deletes its clip video and archived .rrf from disk.
+        Used by the dashboard's per-record delete button.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Deleted (no content)
+        '404':
+          description: No such record
+        '405':
+          description: Method not allowed (only DELETE)
   /media/clip/{id}:
     get:
       tags: [media]

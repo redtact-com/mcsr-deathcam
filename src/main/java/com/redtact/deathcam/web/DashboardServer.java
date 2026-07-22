@@ -94,6 +94,8 @@ public final class DashboardServer {
             String path = exchange.getRequestURI().getPath();
             if (path.equals("/api/records")) {
                 handleRecords(exchange);
+            } else if (path.startsWith("/api/records/")) {
+                handleDeleteRecord(exchange, path.substring("/api/records/".length()));
             } else if (path.equals("/api/openapi.yaml")) {
                 handleStatic(exchange, "/openapi.yaml");     // this app's OpenAPI 3 spec
             } else if (path.equals("/api/mcsrranked.yaml")) {
@@ -161,6 +163,49 @@ public final class DashboardServer {
         exchange.sendResponseHeaders(200, body.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(body);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // DELETE /api/records/{id}
+    // ------------------------------------------------------------------
+
+    /** Delete one death record entirely: its clip video, archived .rrf, and the DB row. */
+    private void handleDeleteRecord(HttpExchange exchange, String idPart) throws IOException {
+        if (!"DELETE".equals(exchange.getRequestMethod())) {
+            exchange.getResponseHeaders().set("Allow", "DELETE");
+            sendText(exchange, 405, "method not allowed");
+            return;
+        }
+        long id;
+        try {
+            id = Long.parseLong(idPart);
+        } catch (NumberFormatException e) {
+            sendText(exchange, 404, "not found");
+            return;
+        }
+        DeathRecord record = store.listRecent(RECORD_FETCH_LIMIT).stream()
+                .filter(r -> r.id == id)
+                .findFirst()
+                .orElse(null);
+        if (record == null) {
+            sendText(exchange, 404, "not found");
+            return;
+        }
+        deleteFileQuietly(record.clipPath);
+        deleteFileQuietly(record.rrfPath);
+        store.delete(id);
+        exchange.sendResponseHeaders(204, -1); // No Content; dispatch's finally closes the exchange
+    }
+
+    private static void deleteFileQuietly(String path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Path.of(path));
+        } catch (Exception e) {
+            System.err.println("[dashboard] could not delete " + path + ": " + e);
         }
     }
 

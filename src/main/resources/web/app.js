@@ -43,6 +43,7 @@ const I18N = {
     replay: 'リプレイ', clips: 'クリップ',
     hint: 'SPACE 再生 · ←/→ 1秒 · SHIFT+←/→ 5秒 · , / . コマ送り · ↑/↓ 前後',
     deaths_on_record: '件', watch: '再生', no_clip: 'クリップなし', hunger_reset: 'ハンガーリセット',
+    delete_record: '🗑 削除', confirm_delete: 'この記録を削除しますか？ クリップ動画とデータが完全に消えます（元に戻せません）。', delete_failed: '削除に失敗しました',
     vs: 'vs', match_prefix: '試合', map_note: '· x/z', no_igt: 'IGT データなし — ランクマ後(.rrf)に付与',
     no_coords: '座標データなし — ランクマ後(.rrf)に付与', other: 'その他', phase_legend: 'フェーズ:',
     tile_deaths: '死亡数', tile_deadliest: '最多フェーズ', tile_topcause: '最多死因', tile_median: '死亡IGT 中央値',
@@ -73,6 +74,7 @@ const I18N = {
     replay: 'REPLAY', clips: 'CLIPS',
     hint: 'SPACE play · ←/→ 1s · SHIFT+←/→ 5s · , / . frame · ↑/↓ prev/next',
     deaths_on_record: 'DEATHS', watch: 'WATCH', no_clip: 'NO CLIP', hunger_reset: 'hunger-reset',
+    delete_record: '🗑 Delete', confirm_delete: 'Delete this record? The clip video and data will be permanently removed (cannot be undone).', delete_failed: 'Failed to delete',
     vs: 'vs', match_prefix: 'match', map_note: '· x/z', no_igt: 'NO IGT DATA — filled in after ranked matches (.rrf)',
     no_coords: 'NO COORDINATES — filled in after ranked matches (.rrf)', other: 'OTHER', phase_legend: 'PHASE:',
     tile_deaths: 'DEATHS', tile_deadliest: 'DEADLIEST PHASE', tile_topcause: 'TOP CAUSE', tile_median: 'MEDIAN IGT AT DEATH',
@@ -409,6 +411,19 @@ function bindPlayer() {
   const video = $('#video');
   $('#player-close').addEventListener('click', closePlayer);
   $('#player').addEventListener('click', e => { if (e.target === $('#player')) closePlayer(); });
+  $('#t-delete').addEventListener('click', async () => {
+    const r = currentRecord;
+    if (!r || !confirm(t('confirm_delete'))) return;
+    try {
+      const res = await fetch(`/api/records/${r.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      records = records.filter(x => x.id !== r.id);
+      closePlayer();
+      renderAll();
+    } catch (err) {
+      alert(t('delete_failed'));
+    }
+  });
   $('#speed').addEventListener('change', e => { video.playbackRate = Number(e.target.value); });
   document.querySelectorAll('.transport [data-seek]').forEach(b =>
     b.addEventListener('click', () => { video.currentTime += Number(b.dataset.seek); }));
